@@ -534,7 +534,6 @@ export default function PourOverTracker() {
                   <thead><tr><th>Pour</th><th>Target</th><th>Actual</th><th>Δ</th><th>Speed</th><th>Pause →</th></tr></thead>
                   <tbody>
                     {recipe.pours.map((p,i)=>{
-                      const a=lastActualPours[i]||{};
                       // target for this pour = cumulative target minus previous cumulative
                       const prevTarget = i>0 ? recipe.pours[i-1].targetWater : 0;
                       const pourTarget = p.targetWater - prevTarget;
