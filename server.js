@@ -4,19 +4,12 @@ require("dotenv").config();
 
 const path = require('path');
 
+const app = express();
+app.use(cors());
+app.use(express.json());
+
 // Serve the built React app
 app.use(express.static(path.join(__dirname, 'build')));
-
-// Catch-all: serve React for any non-API route
-app.get('*', (req, res) => {
-  if (!req.path.startsWith('/notion') && !req.path.startsWith('/sync')) {
-    res.sendFile(path.join(__dirname, 'build', 'index.html'));
-  }
-});
-
-const app = express();
-app.use(cors({ origin: "http://localhost:3000" }));
-app.use(express.json());
 
 const NOTION_VERSION = "2022-06-28";
 const NOTION_API = "https://api.notion.com/v1";
@@ -205,5 +198,11 @@ app.post("/sync", async (req, res) => {
 });
 
 app.get("/health", (_, res) => res.json({ ok: true }));
+
+// Catch-all: serve React for any non-API route
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`✅ Notion proxy running on http://localhost:${PORT}`));
