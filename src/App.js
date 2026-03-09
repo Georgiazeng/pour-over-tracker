@@ -326,9 +326,13 @@ export default function PourOverTracker() {
   };
 
   const exportJSON = () => {
-    const blob=new Blob([JSON.stringify(savedRecipes,null,2)],{type:"application/json"});
-    const url=URL.createObjectURL(blob),a=document.createElement("a");
-    a.href=url;a.download=`pour-over-${new Date().toISOString().split("T")[0]}.json`;a.click();URL.revokeObjectURL(url);
+    const blob = new Blob([JSON.stringify(savedRecipes,null,2)],{type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pour-over-${new Date().toISOString().split("T")[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
     notify("Exported!");
   };
 
