@@ -101,6 +101,11 @@ app.post("/sync", async (req, res) => {
 
     const totalWater = pours.reduce((a, p) => a + Number(p.water), 0);
     const totalTime = pours.reduce((a, p) => a + Number(p.duration), 0);
+    // Total drawdown = time when last pour stops to when brew is fully done (passed in from app) or last pourStopTime
+    const lastPour = recipe.actualPours?.length ? recipe.actualPours[recipe.actualPours.length - 1] : null;
+    const drawdownEnd = recipe.brewEndTime ?? lastPour?.pourStopTime ?? null;
+    const lastPourStop = lastPour?.pourStopTime ?? null;
+    const totalDrawdown = (drawdownEnd != null && lastPourStop != null) ? drawdownEnd - lastPourStop : null;
     const bloom = pours[0] || {}, pour2 = pours[1] || {}, pour3 = pours[2] || {};
     const stirMethods = pours.map(p => p.stirMethod).filter(s => s && s !== "None");
     const agitation = stirMethods.length === 0 ? "Low" : stirMethods.some(s => ["Stir","Rao Spin"].includes(s)) ? "High" : "Medium";
@@ -152,6 +157,8 @@ app.post("/sync", async (req, res) => {
           "Grind Setting": { number: Number(recipe.grindSize) || 0 },
           "Temperature (°C)": { number: Number(recipe.waterTemp) || 0 },
           "Total Time (s)": { number: totalTime },
+          ...(totalDrawdown != null && { "Drawdown Time (s)": { number: totalDrawdown } }),
+          ...(drawdownEnd != null && { "Brew End Time (s)": { number: drawdownEnd } }),
           "Agitation Level": { select: { name: agitation } },
           ...(bloom.water && { "Bloom Water (g)": { number: Number(bloom.water) } }),
           ...(bloom.duration && { "Bloom Time (s)": { number: Number(bloom.duration) } }),

@@ -75,7 +75,9 @@ h1 em{font-style:italic;color:#8b5a2b}
 .ct-btn:hover{background:#dce8fb}.ct-btn:disabled{opacity:.5;cursor:default}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px}
-.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:11px}
+.g4{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+@media(min-width:600px){.g4{grid-template-columns:1fr 1fr 1fr 1fr}}
+@media(max-width:480px){.g3{grid-template-columns:1fr 1fr}}
 .f label{display:block;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.15em;color:#8b6a4a;text-transform:uppercase;margin-bottom:5px}
 .f input,.f select{width:100%;padding:9px 11px;border:1.5px solid #e0d4c4;border-radius:10px;font-family:'Lora',serif;font-size:15px;color:#2c1a0e;background:#faf7f3;outline:none;transition:border-color .18s;-webkit-appearance:none;appearance:none}
 .f input:focus,.f select:focus{border-color:#8b5a2b;background:#fff}
@@ -85,13 +87,13 @@ h1 em{font-style:italic;color:#8b5a2b}
 .stat{flex:1;min-width:60px;background:linear-gradient(135deg,#f0e8dc,#e8ddd0);border-radius:14px;padding:12px 8px;text-align:center}
 .sv{font-family:'Playfair Display',serif;font-size:1.1rem;color:#2c1a0e}
 .sl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;color:#8b6a4a;text-transform:uppercase;margin-top:2px}
-.ph{display:grid;grid-template-columns:1fr 80px 80px 80px 100px 32px;gap:6px;margin-bottom:6px;align-items:center}
+.ph{display:grid;grid-template-columns:minmax(80px,1fr) 60px 60px 72px minmax(70px,90px) 32px;gap:5px;margin-bottom:6px;align-items:center}
 .plbl{font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.08em;text-align:center}
-.pr{display:grid;grid-template-columns:1fr 80px 80px 80px 100px 32px;gap:6px;align-items:center;margin-bottom:9px}
-.pr input{padding:8px 6px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:13px;color:#2c1a0e;background:#faf7f3;outline:none;width:100%;transition:border-color .18s;text-align:center}
+.pr{display:grid;grid-template-columns:minmax(80px,1fr) 60px 60px 72px minmax(70px,90px) 32px;gap:5px;align-items:center;margin-bottom:9px}
+.pr input{padding:7px 4px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:13px;color:#2c1a0e;background:#faf7f3;outline:none;width:100%;transition:border-color .18s;text-align:center;min-width:0;box-sizing:border-box}
 .pr input:focus{border-color:#8b5a2b;background:#fff}
-.pr select{padding:8px 5px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:12px;color:#2c1a0e;background:#faf7f3;outline:none;width:100%;-webkit-appearance:none;appearance:none}
-.db{background:none;border:1.5px solid #e8d4bc;border-radius:8px;width:32px;height:32px;color:#c4a882;cursor:pointer;font-size:15px;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.pr select{padding:7px 2px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:11px;color:#2c1a0e;background:#faf7f3;outline:none;width:100%;-webkit-appearance:none;appearance:none;min-width:0;box-sizing:border-box;text-align:center}
+.db{background:none;border:1.5px solid #e8d4bc;border-radius:8px;width:32px;height:32px;min-width:32px;color:#c4a882;cursor:pointer;font-size:15px;transition:all .15s;display:flex;align-items:center;justify-content:center}
 .db:hover{border-color:#e07a5f;color:#e07a5f}
 .ab{width:100%;padding:10px;border:2px dashed #d4b896;border-radius:12px;background:transparent;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;color:#8b6a4a;cursor:pointer;transition:all .18s;text-transform:uppercase;margin-top:4px}
 .ab:hover{border-color:#8b5a2b;color:#8b5a2b}
@@ -207,6 +209,7 @@ export default function PourOverTracker() {
   const [totalTimer, setTotalTimer] = useState(0);
   const [actualPours, setActualPours] = useState([]);
   const [lastActualPours, setLastActualPours] = useState([]);
+  const [brewEndTime, setBrewEndTime] = useState(null);
   const [notionBeans, setNotionBeans] = useState([]);
   const [notionEquipment, setNotionEquipment] = useState([]);
   const [fetchingBeans, setFetchingBeans] = useState(false);
@@ -264,7 +267,7 @@ export default function PourOverTracker() {
     const snapped = actualPours.map((a,i) => i===activeStep && a.pourStopTime==null ? {...a,pourStopTime:totalTimer} : a);
     if (next < recipe.pours.length) snapped[next] = {...snapped[next], pourStartTime: totalTimer};
     setActualPours(snapped);
-    if (next >= recipe.pours.length) { setLastActualPours(snapped); stopBrew(); notify("☕ Brew complete!"); return; }
+    if (next >= recipe.pours.length) { setLastActualPours(snapped); setBrewEndTime(totalTimer); stopBrew(); notify("☕ Brew complete!"); return; }
     setActiveStep(next);
     setTimers(prev => prev.map((t,i) => i===activeStep?{...t,running:false,done:true}:i===next?{...t,running:true}:t));
   };
@@ -342,7 +345,7 @@ export default function PourOverTracker() {
   const syncToNotion = async () => {
     setSyncing(true);
     try {
-      const res = await fetch("/sync",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...recipe,actualPours:actualPours.length>0?actualPours:lastActualPours.length>0?lastActualPours:null})});
+      const res = await fetch("/sync",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...recipe,actualPours:actualPours.length>0?actualPours:lastActualPours.length>0?lastActualPours:null,brewEndTime})});
       const data = await res.json();
       if (data.success) notify(`✓ Synced — ${data.sessionId}`,"ok"); else notify(`Notion: ${data.error}`,"err");
     } catch { notify("Cannot reach server.js on :3001","err"); }
@@ -488,9 +491,11 @@ export default function PourOverTracker() {
                 <div className="f"><label>Origin / Farm</label><input type="text" value={recipe.bean?.origin||""} onChange={e=>upBean("origin",e.target.value)} placeholder="Ethiopia, Yirgacheffe…"/></div>
                 <div className="f"><label>Variety</label><input type="text" value={recipe.bean?.variety||""} onChange={e=>upBean("variety",e.target.value)} placeholder="Heirloom, Gesha…"/></div>
               </div>
-              <div className="g3">
+              <div className="g2" style={{marginBottom:13}}>
                 <div className="f"><label>Altitude (masl)</label><input type="number" value={recipe.bean?.altitude||""} onChange={e=>upBean("altitude",e.target.value)} placeholder="1800"/></div>
                 <div className="f"><label>Process</label><input type="text" value={recipe.bean?.process||""} onChange={e=>upBean("process",e.target.value)} placeholder="Washed, Natural…"/></div>
+              </div>
+              <div className="g2">
                 <div className="f"><label>Roast Date</label><input type="date" value={recipe.bean?.roastDate||""} onChange={e=>upBean("roastDate",e.target.value)}/></div>
               </div>
             </div>
