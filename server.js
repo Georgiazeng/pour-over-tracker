@@ -200,7 +200,7 @@ app.post("/sync", async (req, res) => {
 app.get("/health", (_, res) => res.json({ ok: true }));
 
 // Catch-all: serve React for any non-API route
-app.get('*', (req, res) => {
+app.get('/{*path}', (req, res) => {
   res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });
 
