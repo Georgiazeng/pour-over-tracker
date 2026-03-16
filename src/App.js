@@ -91,7 +91,7 @@ h1 em{font-style:italic;color:#8b5a2b}
 .pr{background:#faf7f3;border:1.5px solid #e0d4c4;border-radius:11px;padding:8px 10px;margin-bottom:9px}
 .pr-top{display:grid;grid-template-columns:1fr 70px 70px 32px;gap:5px;align-items:center;margin-bottom:6px}
 .pr-bot{display:flex;align-items:center;gap:6px;margin-bottom:5px}
-.pr-lbl{font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;min-width:28px}
+.pr-lbl{font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}
 .pr input{padding:7px 4px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:13px;color:#2c1a0e;background:#fff;outline:none;width:100%;transition:border-color .18s;text-align:center;min-width:0;box-sizing:border-box}
 .pr input:focus{border-color:#8b5a2b;background:#fff}
 .pr select{flex:1;padding:7px 8px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:12px;color:#2c1a0e;background:#fff;outline:none;-webkit-appearance:none;appearance:none;min-width:0}
@@ -444,9 +444,7 @@ export default function PourOverTracker() {
                   <div className="pr-bot">
                     <span className="pr-lbl">Flow</span>
                     <select value={p.flowStyle||"Center"} onChange={e=>upPour(i,"flowStyle",e.target.value)}>{FLOW_STYLES.map(s=><option key={s}>{s}</option>)}</select>
-                  </div>
-                  <div className="pr-bot">
-                    <span className="pr-lbl">Stir</span>
+                    <span className="pr-lbl" style={{marginLeft:4}}>Stir</span>
                     <select value={p.stirMethod||"None"} onChange={e=>upPour(i,"stirMethod",e.target.value)}>{STIR_METHODS.map(s=><option key={s}>{s}</option>)}</select>
                   </div>
                 </div>

@@ -94,15 +94,6 @@ app.post("/sync", async (req, res) => {
     const totalWater = recipe.pours[recipe.pours.length - 1]?.targetWater ?? 0;
     const totalTime = recipe.brewEndTime ?? null; // full brew end time incl. drawdown
 
-    // Agitation level from stir methods
-    const stirMethods = recipe.pours.map(p => p.stirMethod).filter(s => s && s !== "None");
-    const agitation = stirMethods.length === 0 ? "Low"
-      : stirMethods.some(s => ["Stir","Rao Spin","Quick Circular"].includes(s)) ? "High" : "Medium";
-
-    // Flow Style — dominant style across pours
-    const flowStyles = recipe.pours.map(p => p.flowStyle).filter(Boolean);
-    const flowStyle = flowStyles.find(s => s !== "Center") || "Center";
-
     // Build Brew Log — one line per pour: name | flow | start | stop | speed | actual water
     const brewLog = recipe.pours.map((p, i) => {
       const ap = actualPours?.[i];
@@ -165,8 +156,6 @@ app.post("/sync", async (req, res) => {
           "Grind Setting":    { number: Number(recipe.grindSize) || 0 },
           "Temperature (°C)": { number: Number(recipe.waterTemp) || 0 },
           ...(totalTime   && { "Total Time (s)": { number: totalTime } }),
-          "Agitation Level":  { select: { name: agitation } },
-          "Flow Style":       { select: { name: flowStyle } },
 
           // Environment
           ...(recipe.equipment?.waterSource && { "Water Source": { select: { name: recipe.equipment.waterSource } } }),
