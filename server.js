@@ -89,112 +89,121 @@ app.post("/sync", async (req, res) => {
     const { NOTION_BEANS_DB, NOTION_EQUIPMENT_DB, NOTION_BREW_SESSIONS_DB, NOTION_SENSORY_DB } = process.env;
     if (!NOTION_BREW_SESSIONS_DB) return res.status(400).json({ error: "NOTION_BREW_SESSIONS_DB not set in .env" });
 
-    // Use actual pours if available, otherwise fall back to target
-    const pours = recipe.actualPours?.length ? recipe.actualPours.map((a, i) => ({
-      label: recipe.pours[i]?.label || `Pour ${i+1}`,
-      water: a.water ?? recipe.pours[i]?.water ?? 0,
-      duration: (a.pourStartTime != null && a.pourStopTime != null) ? a.pourStopTime - a.pourStartTime : recipe.pours[i]?.duration ?? 0,
-      pourStartTime: a.pourStartTime,
-      pourStopTime: a.pourStopTime,
-      stirMethod: recipe.pours[i]?.stirMethod,
-    })) : recipe.pours;
+    // Resolve actual vs target pours
+    const actualPours = recipe.actualPours?.length ? recipe.actualPours : null;
+    const totalWater = recipe.pours[recipe.pours.length - 1]?.targetWater ?? 0;
+    const totalTime = recipe.brewEndTime ?? null; // full brew end time incl. drawdown
 
-    const totalWater = pours.reduce((a, p) => a + Number(p.water), 0);
-    const totalTime = pours.reduce((a, p) => a + Number(p.duration), 0);
-    // Total drawdown = time when last pour stops to when brew is fully done (passed in from app) or last pourStopTime
-    const lastPour = recipe.actualPours?.length ? recipe.actualPours[recipe.actualPours.length - 1] : null;
-    const drawdownEnd = recipe.brewEndTime ?? lastPour?.pourStopTime ?? null;
-    const lastPourStop = lastPour?.pourStopTime ?? null;
-    const totalDrawdown = (drawdownEnd != null && lastPourStop != null) ? drawdownEnd - lastPourStop : null;
-    const bloom = pours[0] || {}, pour2 = pours[1] || {}, pour3 = pours[2] || {};
-    const stirMethods = pours.map(p => p.stirMethod).filter(s => s && s !== "None");
-    const agitation = stirMethods.length === 0 ? "Low" : stirMethods.some(s => ["Stir","Rao Spin"].includes(s)) ? "High" : "Medium";
+    // Agitation level from stir methods
+    const stirMethods = recipe.pours.map(p => p.stirMethod).filter(s => s && s !== "None");
+    const agitation = stirMethods.length === 0 ? "Low"
+      : stirMethods.some(s => ["Stir","Rao Spin","Quick Circular"].includes(s)) ? "High" : "Medium";
 
-    // Build pour timing notes
-    const timingNotes = recipe.actualPours?.length ? recipe.actualPours.map((a, i) => {
-      const label = recipe.pours[i]?.label || `Pour ${i+1}`;
-      const dur = (a.pourStartTime != null && a.pourStopTime != null) ? a.pourStopTime - a.pourStartTime : null;
-      const speed = dur && dur > 0 ? (a.water / dur).toFixed(1) : null;
-      return `${label}: ${a.water}ml | start ${a.pourStartTime ?? "?"}s | stop ${a.pourStopTime ?? "?"}s${speed ? ` | ${speed} ml/s` : ""}`;
-    }).join("\n") : null;
+    // Flow Style — dominant style across pours
+    const flowStyles = recipe.pours.map(p => p.flowStyle).filter(Boolean);
+    const flowStyle = flowStyles.find(s => s !== "Center") || "Center";
 
-    // Beans
+    // Build Brew Log — one line per pour: name | flow | start | stop | speed | actual water
+    const brewLog = recipe.pours.map((p, i) => {
+      const ap = actualPours?.[i];
+      const label = p.label;
+      const flow = p.flowStyle || "—";
+      const startT = ap?.pourStartTime ?? p.startTime ?? "?";
+      const stopT = ap?.pourStopTime ?? "?";
+      const actualWater = ap?.water ?? p.targetWater;
+      const prevWater = i > 0 ? (actualPours?.[i-1]?.water ?? recipe.pours[i-1]?.targetWater ?? 0) : 0;
+      const incremental = actualWater - prevWater;
+      const dur = (ap?.pourStartTime != null && ap?.pourStopTime != null) ? ap.pourStopTime - ap.pourStartTime : null;
+      const speed = dur && dur > 0 ? (incremental / dur).toFixed(1) : "?";
+      return `${label} | ${flow} | @${startT}s → ${stopT}s | ${speed}ml/s | ${actualWater}ml`;
+    }).join("\n");
+
+    // Session Notes = free text notes only (brew log goes to Brew Log column)
+    const notesText = recipe.notes || "";
+
+    // ── Beans ─────────────────────────────────────────────────────────────────
     let beanPageId = recipe.bean?._notionId || null;
     if (!beanPageId && NOTION_BEANS_DB && recipe.bean?.origin) {
       const beanName = [recipe.bean.roaster, recipe.bean.origin, recipe.bean.variety].filter(Boolean).join(" – ") || "Unknown Bean";
       beanPageId = await findOrCreate(NOTION_BEANS_DB, "Bean Name", beanName, {
-        ...(recipe.bean.origin && { "Origin": { rich_text: [{ text: { content: recipe.bean.origin } }] } }),
-        ...(recipe.bean.variety && { "Varietal": { multi_select: [{ name: recipe.bean.variety }] } }),
-        ...(recipe.bean.process && { "Process": { select: { name: recipe.bean.process } } }),
-        ...(recipe.bean.altitude && { "Altitude (m)": { number: Number(recipe.bean.altitude) } }),
-        ...(recipe.roast && { "Roast Level": { select: { name: recipe.roast } } }),
-        ...(recipe.bean.roaster && { "Roaster": { rich_text: [{ text: { content: recipe.bean.roaster } }] } }),
-        ...(recipe.bean.roastDate && { "Roast Date": { date: { start: recipe.bean.roastDate } } }),
+        ...(recipe.bean.origin    && { "Origin":       { rich_text: [{ text: { content: recipe.bean.origin } }] } }),
+        ...(recipe.bean.variety   && { "Varietal":     { multi_select: recipe.bean.variety.split(",").map(v=>({ name: v.trim() })) } }),
+        ...(recipe.bean.process   && { "Process":      { select: { name: recipe.bean.process } } }),
+        ...(recipe.bean.altitude  && { "Altitude (m)": { number: Number(recipe.bean.altitude) } }),
+        ...(recipe.roast          && { "Roast Level":  { select: { name: recipe.roast } } }),
+        ...(recipe.bean.roaster   && { "Roaster":      { rich_text: [{ text: { content: recipe.bean.roaster } }] } }),
+        ...(recipe.bean.roastDate && { "Roast Date":   { date: { start: recipe.bean.roastDate } } }),
+        ...(recipe.bean.descriptors && { "Notes":      { rich_text: [{ text: { content: recipe.bean.descriptors } }] } }),
       });
     }
 
-    // Equipment
+    // ── Equipment ─────────────────────────────────────────────────────────────
     let equipPageId = recipe.equipment?._brewerNotionId || null;
     if (!equipPageId && NOTION_EQUIPMENT_DB && recipe.equipment?.brewTool) {
-      const equipName = recipe.equipment.brewToolCustom || recipe.equipment.brewTool;
-      equipPageId = await findOrCreate(NOTION_EQUIPMENT_DB, "Equipment Name", equipName, { "Type": { select: { name: "Brewer" } } });
+      equipPageId = await findOrCreate(NOTION_EQUIPMENT_DB, "Equipment Name", recipe.equipment.brewTool, {
+        "Type": { select: { name: "Brewer" } },
+      });
     }
 
-    // Brew Session — use actual data
+    // ── Brew Session ──────────────────────────────────────────────────────────
     const sessionId = `BREW-${Date.now()}`;
-    const notesText = [recipe.notes, timingNotes ? `\n--- Actual pour log ---\n${timingNotes}` : ""].filter(Boolean).join("\n");
-
     const sessionRes = await fetch(`${NOTION_API}/pages`, {
       method: "POST", headers: headers(),
       body: JSON.stringify({
         parent: { database_id: NOTION_BREW_SESSIONS_DB },
         properties: {
-          "Session ID": { title: [{ text: { content: sessionId } }] },
-          "Date": { date: { start: new Date().toISOString().split("T")[0] } },
-          "Brew Method": { select: { name: recipe.equipment?.brewTool || "Pour Over" } },
-          "Dose (g)": { number: Number(recipe.coffee) || 0 },
-          "Water (g)": { number: totalWater },
-          "Grind Setting": { number: Number(recipe.grindSize) || 0 },
-          "Temperature (°C)": { number: Number(recipe.waterTemp) || 0 },
-          "Total Time (s)": { number: totalTime },
-          ...(totalDrawdown != null && { "Drawdown Time (s)": { number: totalDrawdown } }),
-          ...(drawdownEnd != null && { "Brew End Time (s)": { number: drawdownEnd } }),
-          "Agitation Level": { select: { name: agitation } },
-          ...(bloom.water && { "Bloom Water (g)": { number: Number(bloom.water) } }),
-          ...(bloom.duration && { "Bloom Time (s)": { number: Number(bloom.duration) } }),
-          ...(pour2.water && { "Pour 2 (g)": { number: Number(pour2.water) } }),
-          ...(pour3.water && { "Pour 3 (g)": { number: Number(pour3.water) } }),
-          ...(recipe.equipment?.waterSource && { "Water Source": { select: { name: recipe.equipment.waterSource } } }),
-          ...(recipe.equipment?.tds && { "Water TDS": { number: Number(recipe.equipment.tds) } }),
-          ...(notesText && { "Session Notes": { rich_text: [{ text: { content: notesText.slice(0, 2000) } }] } }),
-          ...(recipe.sensory?.overall && { "Overall Score": { number: recipe.sensory.overall } }),
-          ...(recipe.sensory?.balance && { "Balance": { number: recipe.sensory.balance } }),
-          ...(recipe.sensory?.clarity && { "Clarity": { number: recipe.sensory.clarity } }),
-          ...(recipe.sensory?.body && { "Body": { number: recipe.sensory.body } }),
-          ...(beanPageId && { "Bean": { relation: [{ id: beanPageId }] } }),
+          // Identification
+          "Session ID":       { title: [{ text: { content: sessionId } }] },
+          "Date":             { date: { start: new Date().toISOString().split("T")[0] } },
+          ...(beanPageId  && { "Bean":      { relation: [{ id: beanPageId }] } }),
           ...(equipPageId && { "Equipment": { relation: [{ id: equipPageId }] } }),
+          ...(recipe.equipment?.brewTool && { "Brew Method": { select: { name: recipe.equipment.brewTool } } }),
+
+          // Recipe parameters
+          "Dose (g)":         { number: Number(recipe.coffee) || 0 },
+          "Water (g)":        { number: totalWater },
+          "Grind Setting":    { number: Number(recipe.grindSize) || 0 },
+          "Temperature (°C)": { number: Number(recipe.waterTemp) || 0 },
+          ...(totalTime   && { "Total Time (s)": { number: totalTime } }),
+          "Agitation Level":  { select: { name: agitation } },
+          "Flow Style":       { select: { name: flowStyle } },
+
+          // Environment
+          ...(recipe.equipment?.waterSource && { "Water Source": { select: { name: recipe.equipment.waterSource } } }),
+          ...(recipe.equipment?.tds         && { "Water TDS":    { number: Number(recipe.equipment.tds) } }),
+
+          // Outcome
+          ...(recipe.sensory?.overall && { "Overall Score": { number: recipe.sensory.overall } }),
+          ...(recipe.sensory?.balance && { "Balance":       { number: recipe.sensory.balance } }),
+          ...(recipe.sensory?.clarity && { "Clarity":       { number: recipe.sensory.clarity } }),
+          ...(recipe.sensory?.body    && { "Body":          { number: recipe.sensory.body } }),
+          ...(notesText && { "Session Notes": { rich_text: [{ text: { content: notesText.slice(0, 2000) } }] } }),
+          "Brew Log": { rich_text: [{ text: { content: brewLog.slice(0, 2000) } }] },
         },
       }),
     });
     const sessionData = await sessionRes.json();
     if (sessionData.object === "error") return res.status(400).json({ error: sessionData.message });
 
-    // Sensory
-    if (NOTION_SENSORY_DB && recipe.tastingNotes?.length > 0) {
+    // ── Sensory Evaluation ────────────────────────────────────────────────────
+    if (NOTION_SENSORY_DB) {
       await fetch(`${NOTION_API}/pages`, {
         method: "POST", headers: headers(),
         body: JSON.stringify({
           parent: { database_id: NOTION_SENSORY_DB },
           properties: {
             "Evaluation ID": { title: [{ text: { content: `SENSORY-${Date.now()}` } }] },
-            "Brew Session": { relation: [{ id: sessionData.id }] },
-            "Descriptors": { multi_select: recipe.tastingNotes.map(n => ({ name: n })) },
-            ...(recipe.sensory?.aroma && { "Aroma": { number: recipe.sensory.aroma } }),
-            ...(recipe.sensory?.acidity && { "Acidity": { number: recipe.sensory.acidity } }),
-            ...(recipe.sensory?.sweetness && { "Sweetness": { number: recipe.sensory.sweetness } }),
-            ...(recipe.sensory?.bitterness && { "Bitterness": { number: recipe.sensory.bitterness } }),
-            ...(recipe.sensory?.aftertaste && { "Aftertaste": { number: recipe.sensory.aftertaste } }),
-            ...(recipe.notes && { "Tasting Notes": { rich_text: [{ text: { content: recipe.notes } }] } }),
+            "Brew Session":  { relation: [{ id: sessionData.id }] },
+            ...(recipe.tastingNotes?.length && { "Descriptors":  { multi_select: recipe.tastingNotes.map(n => ({ name: n })) } }),
+            ...(recipe.sensory?.aroma      && { "Aroma":        { number: recipe.sensory.aroma } }),
+            ...(recipe.sensory?.acidity    && { "Acidity":      { number: recipe.sensory.acidity } }),
+            ...(recipe.sensory?.sweetness  && { "Sweetness":    { number: recipe.sensory.sweetness } }),
+            ...(recipe.sensory?.bitterness && { "Bitterness":   { number: recipe.sensory.bitterness } }),
+            ...(recipe.sensory?.aftertaste && { "Aftertaste":   { number: recipe.sensory.aftertaste } }),
+            ...(recipe.sensory?.floral     && { "Floral":       { number: recipe.sensory.floral } }),
+            ...(recipe.sensory?.fruity     && { "Fruity":       { number: recipe.sensory.fruity } }),
+            ...(recipe.sensory?.teaLike    && { "Tea-like":     { number: recipe.sensory.teaLike } }),
+            ...(recipe.notes && { "Tasting Notes": { rich_text: [{ text: { content: recipe.notes.slice(0,2000) } }] } }),
           },
         }),
       });

@@ -3,11 +3,11 @@ import { useState, useEffect, useRef } from "react";
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@300;400&family=Lora:ital@0;1&display=swap');`;
 
 const defaultRecipe = {
-  name: "My Pour Over", coffee: 14, grindSize: 20.0, waterTemp: 93,
+  name: "My Pour Over", coffee: 14, grindSize: 20.0, waterTemp: 93, targetTime: 210,
   pours: [
-    { label: "Bloom",    targetWater: 40,  startTime: 0,  duration: 30, stirMethod: "None" },
-    { label: "1st Pour", targetWater: 105, startTime: 45, duration: 45, stirMethod: "Swirl" },
-    { label: "2nd Pour", targetWater: 210, startTime: 105, duration: 45, stirMethod: "None" },
+    { label: "Bloom",    targetWater: 40,  startTime: 0,  stirMethod: "None",  flowStyle: "Center" },
+    { label: "1st Pour", targetWater: 105, startTime: 30, stirMethod: "Swirl", flowStyle: "Spiral" },
+    { label: "2nd Pour", targetWater: 210, startTime: 75, stirMethod: "None",  flowStyle: "Center" },
   ],
   notes: "", tastingNotes: [], roast: "Light",
   equipment: { brewTool: "", grinder: "", waterSource: "", tds: "", hardness: "", waterNotes: "" },
@@ -17,7 +17,8 @@ const defaultRecipe = {
 
 const TASTING_OPTIONS = ["Floral","Fruity","Citrus","Berry","Stone Fruit","Nutty","Chocolatey","Caramel","Spicy","Earthy","Bright","Balanced","Smooth","Sweet","Complex"];
 const ROASTS = ["Light","Light-Medium","Medium","Medium-Dark","Dark"];
-const STIR_METHODS = ["None","Swirl","Stir","Rao Spin","Gentle Tap"];
+const STIR_METHODS = ["None","Slow Circular","Quick Circular","Swirl","Stir","Rao Spin","Gentle Tap"];
+const FLOW_STYLES  = ["Center","Slow Circular","Quick Circular","Circular then Centre","Spiral","Fast","Slow Centre","Mixed"];
 const WATER_SOURCES = ["Filtered","Bottled","Third Wave Water","RO + Minerals","Tap","Other"];
 const SENSORY_FIELDS = [
   ["overall","Overall Score"],["balance","Balance"],["clarity","Clarity"],
@@ -85,13 +86,16 @@ h1 em{font-style:italic;color:#8b5a2b}
 .stat{flex:1;min-width:60px;background:linear-gradient(135deg,#f0e8dc,#e8ddd0);border-radius:14px;padding:12px 8px;text-align:center}
 .sv{font-family:'Playfair Display',serif;font-size:1.1rem;color:#2c1a0e}
 .sl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;color:#8b6a4a;text-transform:uppercase;margin-top:2px}
-.ph{display:grid;grid-template-columns:1fr 80px 80px 80px 100px 32px;gap:6px;margin-bottom:6px;align-items:center}
+.ph{display:grid;grid-template-columns:1fr 70px 70px 32px;gap:5px;margin-bottom:6px;align-items:center}
 .plbl{font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.08em;text-align:center}
-.pr{display:grid;grid-template-columns:1fr 80px 80px 80px 100px 32px;gap:6px;align-items:center;margin-bottom:9px}
-.pr input{padding:8px 6px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:13px;color:#2c1a0e;background:#faf7f3;outline:none;width:100%;transition:border-color .18s;text-align:center}
+.pr{background:#faf7f3;border:1.5px solid #e0d4c4;border-radius:11px;padding:8px 10px;margin-bottom:9px}
+.pr-top{display:grid;grid-template-columns:1fr 70px 70px 32px;gap:5px;align-items:center;margin-bottom:6px}
+.pr-bot{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.pr-lbl{font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;min-width:28px}
+.pr input{padding:7px 4px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:13px;color:#2c1a0e;background:#fff;outline:none;width:100%;transition:border-color .18s;text-align:center;min-width:0;box-sizing:border-box}
 .pr input:focus{border-color:#8b5a2b;background:#fff}
-.pr select{padding:8px 5px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:12px;color:#2c1a0e;background:#faf7f3;outline:none;width:100%;-webkit-appearance:none;appearance:none}
-.db{background:none;border:1.5px solid #e8d4bc;border-radius:8px;width:32px;height:32px;color:#c4a882;cursor:pointer;font-size:15px;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.pr select{flex:1;padding:7px 8px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:12px;color:#2c1a0e;background:#fff;outline:none;-webkit-appearance:none;appearance:none;min-width:0}
+.db{background:none;border:1.5px solid #e8d4bc;border-radius:8px;width:32px;height:32px;min-width:32px;color:#c4a882;cursor:pointer;font-size:15px;transition:all .15s;display:flex;align-items:center;justify-content:center}
 .db:hover{border-color:#e07a5f;color:#e07a5f}
 .ab{width:100%;padding:10px;border:2px dashed #d4b896;border-radius:12px;background:transparent;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;color:#8b6a4a;cursor:pointer;transition:all .18s;text-transform:uppercase;margin-top:4px}
 .ab:hover{border-color:#8b5a2b;color:#8b5a2b}
@@ -194,6 +198,7 @@ export default function PourOverTracker() {
   const [selectedBeanId, setSelectedBeanId] = useState(null);
   const [selectedEquipId, setSelectedEquipId] = useState(null);
   const [showSaved, setShowSaved] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
   const [notif, setNotif] = useState({ msg: "", type: "" });
   const [syncing, setSyncing] = useState(false);
   const iv = useRef(null);
@@ -289,8 +294,41 @@ export default function PourOverTracker() {
   const clearBean = () => setRecipe(r=>({...r, roast:"Light", bean:{origin:"",variety:"",altitude:"",process:"",roastDate:"",roaster:"",lot:"",descriptors:"",impression:""}}));
   const clearEquipment = () => setRecipe(r=>({...r, equipment:{brewTool:"",grinder:"",waterSource:"",tds:"",hardness:"",waterNotes:""}}));
   const clearRecipe = () => { setRecipe({...defaultRecipe, id:undefined}); setLastActualPours([]); notify("Cleared!"); };
-  const upPour = (i,f,v) => { const p=[...recipe.pours]; p[i]={...p[i],[f]:(f==="targetWater"||f==="duration"||f==="startTime")?Number(v):v}; setRecipe(r=>({...r,pours:p})); };
-  const addPour = () => { const l=recipe.pours[recipe.pours.length-1]; setRecipe(r=>({...r,pours:[...r.pours,{label:`Pour ${r.pours.length}`,targetWater:l?l.targetWater+60:60,startTime:l?l.startTime+l.duration:0,duration:45,stirMethod:"None"}]})); };
+
+  const applyTemplate = (tpl) => {
+    const x = Number(recipe.coffee) || 15;
+    const lastPour = recipe.pours[recipe.pours.length-1];
+    const r = (x > 0 && lastPour?.targetWater) ? lastPour.targetWater / x : 15;
+    const total = Math.round(x * r);
+    let pours, name, coffee = x, targetTime = 210;
+    if (tpl === "two") {
+      name = "Two-Pour"; targetTime = 180;
+      pours = [
+        { label:"Bloom",    targetWater: Math.round(x*2), startTime: 0,  stirMethod:"None",          flowStyle:"Center" },
+        { label:"1st Pour", targetWater: total,            startTime: 30, stirMethod:"Slow Circular", flowStyle:"Slow Circular" },
+      ];
+    } else if (tpl === "three") {
+      name = "Three-Pour"; targetTime = 210;
+      pours = [
+        { label:"Bloom",    targetWater: Math.round(x*2),    startTime: 0,  stirMethod:"None",           flowStyle:"Center" },
+        { label:"1st Pour", targetWater: Math.round(total/2), startTime: 30, stirMethod:"Quick Circular", flowStyle:"Quick Circular" },
+        { label:"2nd Pour", targetWater: total,               startTime: 60, stirMethod:"None",           flowStyle:"Circular then Centre" },
+      ];
+    } else if (tpl === "thermal") {
+      name = "Thermal Shock"; coffee = 15; targetTime = 240;
+      pours = [
+        { label:"Bloom",    targetWater: 60,  startTime: 0,   stirMethod:"None", flowStyle:"Fast" },
+        { label:"1st Pour", targetWater: 140, startTime: 40,  stirMethod:"None", flowStyle:"Fast" },
+        { label:"2nd Pour", targetWater: 190, startTime: 75,  stirMethod:"None", flowStyle:"Slow Circular" },
+        { label:"3rd Pour", targetWater: 230, startTime: 105, stirMethod:"None", flowStyle:"Slow Centre" },
+      ];
+    }
+    setRecipe(r => ({...r, name, coffee, pours, targetTime}));
+    setShowTemplates(false);
+    notify(`"${name}" applied!`);
+  };
+  const upPour = (i,f,v) => { const p=[...recipe.pours]; p[i]={...p[i],[f]:(f==="targetWater"||f==="startTime")?Number(v):v}; setRecipe(r=>({...r,pours:p})); };
+  const addPour = () => { const l=recipe.pours[recipe.pours.length-1]; setRecipe(r=>({...r,pours:[...r.pours,{label:`Pour ${r.pours.length+1}`,targetWater:l?l.targetWater+60:60,startTime:l?l.startTime+45:0,stirMethod:"None",flowStyle:"Center"}]})); };
   const remPour = (i) => setRecipe(r=>({...r,pours:r.pours.filter((_,idx)=>idx!==i)}));
   const toggleTaste = (t) => setRecipe(r=>({...r,tastingNotes:r.tastingNotes.includes(t)?r.tastingNotes.filter(n=>n!==t):[...r.tastingNotes,t]}));
 
@@ -391,26 +429,37 @@ export default function PourOverTracker() {
               <div className="ct"><span>Pour Stages</span></div>
               <div className="ph">
                 <div className="plbl" style={{textAlign:"left"}}>Stage</div>
-                <div className="plbl">Scale ml</div>
+                <div className="plbl">ml</div>
                 <div className="plbl">Start (s)</div>
-                <div className="plbl">Duration (s)</div>
-                <div className="plbl">Stir</div>
                 <div/>
               </div>
               {recipe.pours.map((p,i)=>(
                 <div className="pr" key={i}>
-                  <input value={p.label} onChange={e=>upPour(i,"label",e.target.value)} style={{textAlign:"left"}}/>
-                  <input type="number" value={p.targetWater} onChange={e=>upPour(i,"targetWater",e.target.value)}/>
-                  <input type="number" value={p.startTime} onChange={e=>upPour(i,"startTime",e.target.value)}/>
-                  <input type="number" value={p.duration} onChange={e=>upPour(i,"duration",e.target.value)}/>
-                  <select value={p.stirMethod||"None"} onChange={e=>upPour(i,"stirMethod",e.target.value)}>{STIR_METHODS.map(s=><option key={s}>{s}</option>)}</select>
-                  <button className="db" onClick={()=>remPour(i)}>×</button>
+                  <div className="pr-top">
+                    <input value={p.label} onChange={e=>upPour(i,"label",e.target.value)} style={{textAlign:"left"}}/>
+                    <input type="number" value={p.targetWater} onChange={e=>upPour(i,"targetWater",e.target.value)}/>
+                    <input type="number" value={p.startTime} onChange={e=>upPour(i,"startTime",e.target.value)}/>
+                    <button className="db" onClick={()=>remPour(i)}>×</button>
+                  </div>
+                  <div className="pr-bot">
+                    <span className="pr-lbl">Flow</span>
+                    <select value={p.flowStyle||"Center"} onChange={e=>upPour(i,"flowStyle",e.target.value)}>{FLOW_STYLES.map(s=><option key={s}>{s}</option>)}</select>
+                  </div>
+                  <div className="pr-bot">
+                    <span className="pr-lbl">Stir</span>
+                    <select value={p.stirMethod||"None"} onChange={e=>upPour(i,"stirMethod",e.target.value)}>{STIR_METHODS.map(s=><option key={s}>{s}</option>)}</select>
+                  </div>
                 </div>
               ))}
               <button className="ab" onClick={addPour}>+ Add Pour</button>
+              <div style={{marginTop:12,display:"flex",alignItems:"center",gap:10}}>
+                <div className="f" style={{flex:1,marginBottom:0}}><label>Target Total Time (s)</label><input type="number" value={recipe.targetTime||210} onChange={e=>up("targetTime",Number(e.target.value))}/></div>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#8b6a4a",paddingTop:20}}>{`= ${Math.floor((recipe.targetTime||210)/60)}:${String((recipe.targetTime||210)%60).padStart(2,"0")}`}</div>
+              </div>
             </div>
             <div className="ar">
               <button className="ab2" onClick={()=>setShowSaved(s=>!s)}>📂 Saved</button>
+              <button className="ab2" onClick={()=>setShowTemplates(s=>!s)}>📋 Templates</button>
               <button className="ab2" onClick={()=>{setRecipe({...defaultRecipe,id:undefined});notify("New recipe!");}}>+ New</button>
               <button className="ab2 export" onClick={exportJSON}>⬇ Export</button>
               <button className="ab2 clr" onClick={clearRecipe}>✕ Clear</button>
@@ -428,6 +477,21 @@ export default function PourOverTracker() {
                   ))}
                 </div>
               )}
+            </div>}
+
+            {showTemplates&&<div className="card" style={{marginTop:14}}>
+              <div className="ct"><span>Templates</span><span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#c4a882"}}>scales with your dose &amp; ratio</span></div>
+              {[
+                {key:"two",    icon:"☕",   title:"Two-Pour",      desc:`Bloom → 1st pour @30s (Slow Circular) · target 3:00`},
+                {key:"three",  icon:"☕☕", title:"Three-Pour",    desc:`Bloom → 1st @30s (Quick Circ) → 2nd @60s (Circ→Centre)`},
+                {key:"thermal",icon:"🧊",  title:"Thermal Shock", desc:"Fixed 15g · Fast bloom → Fast → Slow Circ → Slow Centre"},
+              ].map(t=>(
+                <div key={t.key} className="saved-i" onClick={()=>applyTemplate(t.key)}>
+                  <div style={{fontSize:20,marginRight:10}}>{t.icon}</div>
+                  <div style={{flex:1}}><div className="saved-n">{t.title}</div><div className="saved-m">{t.desc}</div></div>
+                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8b5a2b"}}>Apply →</div>
+                </div>
+              ))}
             </div>}
           </>}
 
@@ -522,7 +586,7 @@ export default function PourOverTracker() {
                       <div className="snn">{i+1}</div>
                       <div className="si-info">
                         <div className="si-name">{p.label}</div>
-                        <div className="si-meta">→{p.targetWater}ml · @{formatTime(p.startTime)} · {formatTime(p.duration)} · {p.stirMethod||"No stir"}</div>
+                        <div className="si-meta">→{p.targetWater}ml · @{formatTime(p.startTime)} · {p.flowStyle||p.stirMethod||"No stir"}</div>
                       </div>
                     </div>
                   ))}
@@ -563,7 +627,7 @@ export default function PourOverTracker() {
               {/* ── SINGLE CLOCK BREW UI ── */}
               {(()=>{
                 const POUR_COLORS = ["#c4843a","#8b5a2b","#5a3a1a","#a07040","#7a5030"];
-                const totalBrewTime = Math.max(...recipe.pours.map(p=>p.startTime+p.duration), 1);
+                const totalBrewTime = recipe.targetTime || Math.max(...recipe.pours.map(p=>p.startTime+60), 180);
                 const cx=130, cy=130, r=110, stroke=14;
                 const circ = 2*Math.PI*r;
                 const toAngle = (s) => (s/totalBrewTime)*360 - 90;
@@ -602,7 +666,7 @@ export default function PourOverTracker() {
 
                       {/* Pour target zones */}
                       {recipe.pours.map((p,i)=>(
-                        <path key={i} d={arcPath(p.startTime, p.startTime+p.duration, POUR_COLORS[i%POUR_COLORS.length])}
+                        <path key={i} d={arcPath(p.startTime, recipe.pours[i+1]?.startTime ?? totalBrewTime, POUR_COLORS[i%POUR_COLORS.length])}
                           fill="none" stroke={POUR_COLORS[i%POUR_COLORS.length]} strokeWidth={stroke} opacity={0.25} strokeLinecap="butt"/>
                       ))}
 
