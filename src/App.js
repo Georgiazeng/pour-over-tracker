@@ -260,30 +260,24 @@ export default function PourOverTracker() {
     }
     setActualPours(snapped);
     if (next >= recipe.pours.length) {
-      setLastActualPours(snapped); setBrewDone(true); setBrewEndTime(totalTimer);
-      setBrewing(false); clearInterval(iv.current);
-      notify("☕ Brew complete! Clock still running for drawdown.");
+      setLastActualPours(snapped);
+      setBrewEndTime(totalTimer);
+      stopBrew();
+      notify("☕ Brew complete!");
       return;
     }
     setActiveStep(next);
     setTimers(prev => prev.map((t,i) => i===activeStep?{...t,running:false,done:true}:i===next?{...t,running:true}:t));
   };
 
-  const finishDrawdown = () => {
-    setBrewEndTime(totalTimer);
-    setLastActualPours(actualPours);
-    stopBrew();
-    notify("Brew recorded!");
-  };
-
   const snapStop = (i) => setActualPours(prev => { const u=[...prev]; u[i]={...u[i],pourStopTime:totalTimer}; return u; });
   const updateActual = (i, field, val) => setActualPours(prev => { const u=[...prev]; u[i]={...u[i],[field]:val===""?null:Number(val)}; return u; });
 
   useEffect(() => {
-    if (!brewing && !brewDone) { clearInterval(iv.current); return; }
+    if (!brewing) { clearInterval(iv.current); return; }
     iv.current = setInterval(() => { setTotalTimer(t=>t+1); }, 1000);
     return () => clearInterval(iv.current);
-  }, [brewing, brewDone]);
+  }, [brewing]);
 
   const up = (f,v) => setRecipe(r=>({...r,[f]:v}));
   const upEquip = (f,v) => setRecipe(r=>({...r,equipment:{...r.equipment,[f]:v}}));
@@ -593,9 +587,10 @@ export default function PourOverTracker() {
               </div>
 
               {lastActualPours.length>0&&<div className="card">
-                <div className="ct"><span>Last Brew — Actual vs Target</span></div>
+                <div className="ct"><span>Last Brew — Log</span></div>
+                <div style={{overflowX:"auto"}}>
                 <table className="summary-table">
-                  <thead><tr><th>Pour</th><th>Target</th><th>Actual</th><th>Δ</th><th>Speed</th><th>Pause →</th></tr></thead>
+                  <thead><tr><th>Pour</th><th>Flow</th><th>Target</th><th>Actual</th><th>Δ</th><th>Start</th><th>Stop</th><th>Speed</th><th>Pause→</th></tr></thead>
                   <tbody>
                     {recipe.pours.map((p,i)=>{
                       const prevTarget = i>0 ? recipe.pours[i-1].targetWater : 0;
@@ -604,19 +599,24 @@ export default function PourOverTracker() {
                       const diff = pourActual != null ? pourActual - pourTarget : null;
                       const speed = getPourSpeed(i, lastActualPours);
                       const pause = getPause(i, lastActualPours);
+                      const ap = lastActualPours[i]||{};
                       return(
                         <tr key={i}>
                           <td>{p.label}</td>
+                          <td style={{fontSize:9}}>{p.flowStyle||"—"}</td>
                           <td>{pourTarget}ml</td>
                           <td>{pourActual!=null?`${pourActual}ml`:"—"}</td>
                           <td className={diff>0?"diff-over":diff<0?"diff-under":""}>{diff!=null?(diff>0?`+${diff}`:diff)+"ml":"—"}</td>
+                          <td>{ap.pourStartTime!=null?`${ap.pourStartTime}s`:"—"}</td>
+                          <td>{ap.pourStopTime!=null?`${ap.pourStopTime}s`:"—"}</td>
                           <td>{speed?`${speed}ml/s`:"—"}</td>
-                          <td>{pause!=null?`${pause}s`:i<recipe.pours.length-1?"—":"end"}</td>
+                          <td>{pause!=null?`${pause}s`:i<recipe.pours.length-1?"—":"↓"}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>}
 
               <button className="bb go" onClick={startBrew}>Start Brewing ☕</button>
@@ -738,33 +738,36 @@ export default function PourOverTracker() {
                     </div>
                   </div>}
 
-                  {/* Drawdown summary */}
-                  {brewDone&&<>
-                    <div className="brew-drawdown">⏱ drawdown in progress…</div>
-                    <div className="card">
-                      <div className="ct"><span>Brew Summary</span></div>
-                      <table className="summary-table">
-                        <thead><tr><th>Pour</th><th>Target</th><th>Actual</th><th>Δ</th><th>Speed</th><th>Pause →</th></tr></thead>
-                        <tbody>
-                          {recipe.pours.map((p,i)=>{
-                            const prev = i>0?recipe.pours[i-1].targetWater:0;
-                            const pt = p.targetWater-prev;
-                            const pa = getWaterPoured(i, lastActualPours);
-                            const diff = pa!=null?pa-pt:null;
-                            const speed = getPourSpeed(i, lastActualPours);
-                            const pause = getPause(i, lastActualPours);
-                            return <tr key={i}>
-                              <td>{p.label}</td><td>{pt}ml</td>
-                              <td>{pa!=null?`${pa}ml`:"—"}</td>
-                              <td className={diff>0?"diff-over":diff<0?"diff-under":""}>{diff!=null?(diff>0?`+${diff}`:diff)+"ml":"—"}</td>
-                              <td>{speed?`${speed}ml/s`:"—"}</td>
-                              <td>{pause!=null?`${pause}s`:i<recipe.pours.length-1?"—":"end"}</td>
-                            </tr>;
-                          })}
-                        </tbody>
-                      </table>
+                  {brewDone&&<div className="card">
+                    <div className="ct"><span>Brew Log</span><span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#6aab6a"}}>✓ recorded</span></div>
+                    <div style={{overflowX:"auto"}}>
+                    <table className="summary-table">
+                      <thead><tr><th>Pour</th><th>Flow</th><th>Target</th><th>Actual</th><th>Δ</th><th>Start</th><th>Stop</th><th>Speed</th><th>Pause→</th></tr></thead>
+                      <tbody>
+                        {recipe.pours.map((p,i)=>{
+                          const prev = i>0?recipe.pours[i-1].targetWater:0;
+                          const pt = p.targetWater-prev;
+                          const pa = getWaterPoured(i, lastActualPours);
+                          const diff = pa!=null?pa-pt:null;
+                          const speed = getPourSpeed(i, lastActualPours);
+                          const pause = getPause(i, lastActualPours);
+                          const ap = lastActualPours[i]||{};
+                          return <tr key={i}>
+                            <td>{p.label}</td>
+                            <td style={{fontSize:9}}>{p.flowStyle||"—"}</td>
+                            <td>{pt}ml</td>
+                            <td>{pa!=null?`${pa}ml`:"—"}</td>
+                            <td className={diff>0?"diff-over":diff<0?"diff-under":""}>{diff!=null?(diff>0?`+${diff}`:diff)+"ml":"—"}</td>
+                            <td>{ap.pourStartTime!=null?`${ap.pourStartTime}s`:"—"}</td>
+                            <td>{ap.pourStopTime!=null?`${ap.pourStopTime}s`:"—"}</td>
+                            <td>{speed?`${speed}ml/s`:"—"}</td>
+                            <td>{pause!=null?`${pause}s`:i<recipe.pours.length-1?"—":"↓"}</td>
+                          </tr>;
+                        })}
+                      </tbody>
+                    </table>
                     </div>
-                  </>}
+                  </div>}
 
                   {/* Action buttons */}
                   <div className="brew-actions">
@@ -772,12 +775,11 @@ export default function PourOverTracker() {
                       {!hasSnapped
                         ? <button className="bb snap" onClick={handleSnap}>⏱ Snap Stop</button>
                         : <button className="bb nx" onClick={handleContinue}>
-                            {activeStep<recipe.pours.length-1?`Continue → ${recipe.pours[activeStep+1]?.label}`:"Finish Pour ✓"}
+                            {activeStep<recipe.pours.length-1?`Continue → ${recipe.pours[activeStep+1]?.label}`:"Finish Brew ✓"}
                           </button>
                       }
                     </>}
-                    {brewDone&&<button className="bb done-btn" onClick={finishDrawdown}>✓ Done — Record Brew</button>}
-                    <button className="bb st" onClick={stopBrew}>Abandon</button>
+                    <button className="bb st" onClick={stopBrew}>{brewDone?"← Back":"Abandon"}</button>
                   </div>
                 </>;
               })()}
