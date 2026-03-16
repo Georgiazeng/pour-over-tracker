@@ -75,9 +75,7 @@ h1 em{font-style:italic;color:#8b5a2b}
 .ct-btn:hover{background:#dce8fb}.ct-btn:disabled{opacity:.5;cursor:default}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px}
-.g4{display:grid;grid-template-columns:1fr 1fr;gap:11px}
-@media(min-width:600px){.g4{grid-template-columns:1fr 1fr 1fr 1fr}}
-@media(max-width:480px){.g3{grid-template-columns:1fr 1fr}}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:11px}
 .f label{display:block;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.15em;color:#8b6a4a;text-transform:uppercase;margin-bottom:5px}
 .f input,.f select{width:100%;padding:9px 11px;border:1.5px solid #e0d4c4;border-radius:10px;font-family:'Lora',serif;font-size:15px;color:#2c1a0e;background:#faf7f3;outline:none;transition:border-color .18s;-webkit-appearance:none;appearance:none}
 .f input:focus,.f select:focus{border-color:#8b5a2b;background:#fff}
@@ -87,13 +85,13 @@ h1 em{font-style:italic;color:#8b5a2b}
 .stat{flex:1;min-width:60px;background:linear-gradient(135deg,#f0e8dc,#e8ddd0);border-radius:14px;padding:12px 8px;text-align:center}
 .sv{font-family:'Playfair Display',serif;font-size:1.1rem;color:#2c1a0e}
 .sl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;color:#8b6a4a;text-transform:uppercase;margin-top:2px}
-.ph{display:grid;grid-template-columns:minmax(80px,1fr) 60px 60px 72px minmax(70px,90px) 32px;gap:5px;margin-bottom:6px;align-items:center}
+.ph{display:grid;grid-template-columns:1fr 80px 80px 80px 100px 32px;gap:6px;margin-bottom:6px;align-items:center}
 .plbl{font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.08em;text-align:center}
-.pr{display:grid;grid-template-columns:minmax(80px,1fr) 60px 60px 72px minmax(70px,90px) 32px;gap:5px;align-items:center;margin-bottom:9px}
-.pr input{padding:7px 4px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:13px;color:#2c1a0e;background:#faf7f3;outline:none;width:100%;transition:border-color .18s;text-align:center;min-width:0;box-sizing:border-box}
+.pr{display:grid;grid-template-columns:1fr 80px 80px 80px 100px 32px;gap:6px;align-items:center;margin-bottom:9px}
+.pr input{padding:8px 6px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:13px;color:#2c1a0e;background:#faf7f3;outline:none;width:100%;transition:border-color .18s;text-align:center}
 .pr input:focus{border-color:#8b5a2b;background:#fff}
-.pr select{padding:7px 2px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:11px;color:#2c1a0e;background:#faf7f3;outline:none;width:100%;-webkit-appearance:none;appearance:none;min-width:0;box-sizing:border-box;text-align:center}
-.db{background:none;border:1.5px solid #e8d4bc;border-radius:8px;width:32px;height:32px;min-width:32px;color:#c4a882;cursor:pointer;font-size:15px;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.pr select{padding:8px 5px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:12px;color:#2c1a0e;background:#faf7f3;outline:none;width:100%;-webkit-appearance:none;appearance:none}
+.db{background:none;border:1.5px solid #e8d4bc;border-radius:8px;width:32px;height:32px;color:#c4a882;cursor:pointer;font-size:15px;transition:all .15s;display:flex;align-items:center;justify-content:center}
 .db:hover{border-color:#e07a5f;color:#e07a5f}
 .ab{width:100%;padding:10px;border:2px dashed #d4b896;border-radius:12px;background:transparent;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;color:#8b6a4a;cursor:pointer;transition:all .18s;text-transform:uppercase;margin-top:4px}
 .ab:hover{border-color:#8b5a2b;color:#8b5a2b}
@@ -101,59 +99,36 @@ h1 em{font-style:italic;color:#8b5a2b}
 .chip{padding:6px 12px;border-radius:20px;border:1.5px solid #e0d4c4;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;cursor:pointer;transition:all .15s;background:#faf7f3;color:#8b6a4a;text-transform:uppercase}
 .chip.on{background:#2c1a0e;border-color:#2c1a0e;color:#f5efe6}
 
-/* ── BREW TAB: compact rows ── */
-
-/* Header bar during brew */
-.brew-header{background:#fffdf9;border-radius:16px;padding:14px 18px;box-shadow:0 2px 12px rgba(44,26,14,.06),0 0 0 1px rgba(212,165,116,.2);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
-.brew-header-time{font-family:'Playfair Display',serif;font-size:1.8rem;color:#1a0d00;line-height:1}
-.brew-header-lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:#8b6a4a;margin-top:2px}
-.brew-header-active{text-align:right}
-.brew-header-step{font-family:'Playfair Display',serif;font-size:1.1rem;color:#8b5a2b}
-.brew-header-target{font-family:'DM Mono',monospace;font-size:10px;color:#c4a882;margin-top:2px}
-
-/* Each pour = one compact row */
-.brew-rows{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
-.brew-row{background:#fffdf9;border-radius:13px;border:1.5px solid rgba(212,165,116,.25);transition:all .2s;overflow:hidden}
-.brew-row.act{border-color:#8b5a2b;background:#fff8f0;box-shadow:0 3px 16px rgba(139,90,43,.15)}
-.brew-row.done{opacity:.45}
-.brew-row.waiting{opacity:.7}
-
-/* Top part of each row — always visible */
-.brew-row-top{display:flex;align-items:center;gap:10px;padding:10px 14px}
-
-/* Mini ring: 40px */
-.mini-ring{width:40px;height:40px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center}
-.mini-ring-inner{width:28px;height:28px;border-radius:50%;background:#fffdf9;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 4px rgba(0,0,0,.1)}
-.mini-ring-time{font-family:'DM Mono',monospace;font-size:9px;color:#1a0d00;font-weight:bold;line-height:1;text-align:center}
-
-/* Labels */
-.brew-row-name{font-family:'Lora',serif;font-size:15px;color:#2c1a0e;flex:1}
-.brew-row-name.act-name{color:#8b5a2b;font-weight:600}
-.brew-row-meta{font-family:'DM Mono',monospace;font-size:10px;color:#8b6a4a;white-space:nowrap}
-.brew-row-badge{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:20px;flex-shrink:0}
-.badge-now{background:#fff0e0;color:#8b5a2b;border:1px solid #e8c88a}
-.badge-done{background:#edfaed;color:#5a9a5a;border:1px solid #b0d8b0}
-.badge-wait{background:#f0ece6;color:#c4a882;border:1px solid #e0d4c4}
-
-/* Expanded actual inputs — only show for active/done */
-.brew-row-inputs{padding:0 14px 12px;display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end}
-.mini-field{display:flex;flex-direction:column;gap:3px}
-.mini-lbl{font-family:'DM Mono',monospace;font-size:8px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.1em}
-.mini-inp{width:100%;padding:8px 8px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'DM Mono',monospace;font-size:13px;color:#2c1a0e;background:#faf7f3;outline:none;text-align:center;transition:border-color .18s}
+/* ── BREW TAB: single clock ── */
+.brew-clock-wrap{display:flex;flex-direction:column;align-items:center;margin-bottom:16px}
+.brew-clock-svg{width:260px;height:260px;overflow:visible}
+.brew-clock-centre-time{font-family:'Playfair Display',serif;font-size:2rem;fill:#1a0d00;text-anchor:middle;dominant-baseline:middle}
+.brew-clock-centre-pour{font-family:'DM Mono',monospace;font-size:11px;fill:#8b5a2b;text-anchor:middle;letter-spacing:.1em;text-transform:uppercase}
+.brew-clock-centre-grams{font-family:'DM Mono',monospace;font-size:10px;fill:#c4a882;text-anchor:middle}
+.brew-legend{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:14px}
+.brew-legend-item{display:flex;align-items:center;gap:5px;font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.08em}
+.brew-legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.brew-status{background:#fffdf9;border-radius:16px;padding:14px 18px;box-shadow:0 2px 12px rgba(44,26,14,.06),0 0 0 1px rgba(212,165,116,.2);margin-bottom:12px;text-align:center}
+.brew-status-step{font-family:'Lora',serif;font-size:1.2rem;color:#2c1a0e;margin-bottom:4px}
+.brew-status-meta{font-family:'DM Mono',monospace;font-size:10px;color:#8b6a4a;letter-spacing:.08em}
+.brew-actual-inp{display:flex;align-items:center;gap:10px;justify-content:center;margin-top:10px}
+.brew-actual-lbl{font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.1em}
+.brew-actual-field{display:flex;flex-direction:column;align-items:center;gap:3px}
+.mini-inp{width:80px;padding:8px 8px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'DM Mono',monospace;font-size:14px;color:#2c1a0e;background:#faf7f3;outline:none;text-align:center;transition:border-color .18s}
 .mini-inp:focus{border-color:#8b5a2b;background:#fff}
 .mini-inp.diff{border-color:#e07a5f;color:#e07a5f}
 .mini-inp[readonly]{background:#f0ece6;color:#8b6a4a}
-.snap-btn{padding:8px 14px;border:2px solid #d4a574;border-radius:9px;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8b5a2b;background:#fff8f0;cursor:pointer;transition:all .15s;white-space:nowrap;height:100%}
+.snap-btn{padding:10px 20px;border:2px solid #d4a574;border-radius:12px;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8b5a2b;background:#fff8f0;cursor:pointer;transition:all .15s;white-space:nowrap}
 .snap-btn:hover{background:#f5e6d0;border-color:#8b5a2b}
 .snap-btn:active{transform:scale(.97)}
-.speed-pill{font-family:'DM Mono',monospace;font-size:9px;color:#8b5a2b;padding:4px 10px;background:#fff0e0;border-radius:20px;text-align:center;margin:0 14px 10px}
-
-/* Next / Stop buttons */
 .brew-actions{display:flex;flex-direction:column;gap:8px}
 .bb{width:100%;padding:15px;border-radius:16px;border:none;cursor:pointer;font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:600;transition:all .2s}
 .bb.go{background:#2c1a0e;color:#f5efe6}.bb.go:hover{background:#3d2510;transform:translateY(-1px);box-shadow:0 6px 20px rgba(44,26,14,.25)}
 .bb.nx{background:#8b5a2b;color:#fff}.bb.nx:hover{background:#7a4e24}
+.bb.snap{background:#5a7a9a;color:#fff}.bb.snap:hover{background:#4a6a8a}
+.bb.done-btn{background:#5a8a5a;color:#fff}.bb.done-btn:hover{background:#4a7a4a}
 .bb.st{background:#e8ddd0;color:#8b6a4a;padding:11px}.bb.st:hover{background:#ddd0c0}
+.brew-drawdown{text-align:center;font-family:'DM Mono',monospace;font-size:11px;color:#8b6a4a;margin-bottom:10px;letter-spacing:.08em}
 
 /* Summary table */
 .summary-table{width:100%;border-collapse:collapse}
@@ -209,6 +184,8 @@ export default function PourOverTracker() {
   const [totalTimer, setTotalTimer] = useState(0);
   const [actualPours, setActualPours] = useState([]);
   const [lastActualPours, setLastActualPours] = useState([]);
+  const [brewDone, setBrewDone] = useState(false);
+  const [snapMarks, setSnapMarks] = useState([]); // [{time, type: 'snap'|'start'}]
   const [brewEndTime, setBrewEndTime] = useState(null);
   const [notionBeans, setNotionBeans] = useState([]);
   const [notionEquipment, setNotionEquipment] = useState([]);
@@ -255,31 +232,53 @@ export default function PourOverTracker() {
   };
 
   const startBrew = () => {
-    setBrewing(true); setActiveStep(0); setTotalTimer(0);
+    setBrewing(true); setActiveStep(0); setTotalTimer(0); setBrewDone(false);
+    setSnapMarks([]);
     setActualPours(recipe.pours.map((p,i) => ({ water: p.targetWater, pourStartTime: i===0?0:null, pourStopTime: null })));
     setTimers(recipe.pours.map((_,i) => ({ elapsed:0, running:i===0, done:false })));
   };
 
-  const stopBrew = () => { setBrewing(false); setActiveStep(-1); setTotalTimer(0); setTimers([]); clearInterval(iv.current); };
+  const stopBrew = () => { setBrewing(false); setActiveStep(-1); setTotalTimer(0); setTimers([]); setBrewDone(false); setSnapMarks([]); clearInterval(iv.current); };
 
-  const advanceStep = () => {
+  const handleSnap = () => {
+    const i = activeStep;
+    setActualPours(prev => { const u=[...prev]; u[i]={...u[i],pourStopTime:totalTimer}; return u; });
+    setSnapMarks(prev => [...prev, {time: totalTimer, type: 'snap'}]);
+  };
+
+  const handleContinue = () => {
     const next = activeStep + 1;
     const snapped = actualPours.map((a,i) => i===activeStep && a.pourStopTime==null ? {...a,pourStopTime:totalTimer} : a);
-    if (next < recipe.pours.length) snapped[next] = {...snapped[next], pourStartTime: totalTimer};
+    if (next < recipe.pours.length) {
+      snapped[next] = {...snapped[next], pourStartTime: totalTimer};
+      setSnapMarks(prev => [...prev, {time: totalTimer, type: 'start'}]);
+    }
     setActualPours(snapped);
-    if (next >= recipe.pours.length) { setLastActualPours(snapped); setBrewEndTime(totalTimer); stopBrew(); notify("☕ Brew complete!"); return; }
+    if (next >= recipe.pours.length) {
+      setLastActualPours(snapped); setBrewDone(true); setBrewEndTime(totalTimer);
+      setBrewing(false); clearInterval(iv.current);
+      notify("☕ Brew complete! Clock still running for drawdown.");
+      return;
+    }
     setActiveStep(next);
     setTimers(prev => prev.map((t,i) => i===activeStep?{...t,running:false,done:true}:i===next?{...t,running:true}:t));
+  };
+
+  const finishDrawdown = () => {
+    setBrewEndTime(totalTimer);
+    setLastActualPours(actualPours);
+    stopBrew();
+    notify("Brew recorded!");
   };
 
   const snapStop = (i) => setActualPours(prev => { const u=[...prev]; u[i]={...u[i],pourStopTime:totalTimer}; return u; });
   const updateActual = (i, field, val) => setActualPours(prev => { const u=[...prev]; u[i]={...u[i],[field]:val===""?null:Number(val)}; return u; });
 
   useEffect(() => {
-    if (!brewing) { clearInterval(iv.current); return; }
-    iv.current = setInterval(() => { setTotalTimer(t=>t+1); setTimers(prev=>prev.map(t=>t.running?{...t,elapsed:t.elapsed+1}:t)); }, 1000);
+    if (!brewing && !brewDone) { clearInterval(iv.current); return; }
+    iv.current = setInterval(() => { setTotalTimer(t=>t+1); }, 1000);
     return () => clearInterval(iv.current);
-  }, [brewing, activeStep]);
+  }, [brewing, brewDone]);
 
   const up = (f,v) => setRecipe(r=>({...r,[f]:v}));
   const upEquip = (f,v) => setRecipe(r=>({...r,equipment:{...r.equipment,[f]:v}}));
@@ -491,11 +490,9 @@ export default function PourOverTracker() {
                 <div className="f"><label>Origin / Farm</label><input type="text" value={recipe.bean?.origin||""} onChange={e=>upBean("origin",e.target.value)} placeholder="Ethiopia, Yirgacheffe…"/></div>
                 <div className="f"><label>Variety</label><input type="text" value={recipe.bean?.variety||""} onChange={e=>upBean("variety",e.target.value)} placeholder="Heirloom, Gesha…"/></div>
               </div>
-              <div className="g2" style={{marginBottom:13}}>
+              <div className="g3">
                 <div className="f"><label>Altitude (masl)</label><input type="number" value={recipe.bean?.altitude||""} onChange={e=>upBean("altitude",e.target.value)} placeholder="1800"/></div>
                 <div className="f"><label>Process</label><input type="text" value={recipe.bean?.process||""} onChange={e=>upBean("process",e.target.value)} placeholder="Washed, Natural…"/></div>
-              </div>
-              <div className="g2">
                 <div className="f"><label>Roast Date</label><input type="date" value={recipe.bean?.roastDate||""} onChange={e=>upBean("roastDate",e.target.value)}/></div>
               </div>
             </div>
@@ -516,7 +513,7 @@ export default function PourOverTracker() {
 
           {/* ── BREW ── */}
           {tab==="brew"&&<>
-            {!brewing?<>
+            {(!brewing && !brewDone)?<>
               <div className="card">
                 <div className="ct"><span>Brew Plan — {recipe.name}</span></div>
                 <div className="brew-plan-list">
@@ -539,7 +536,6 @@ export default function PourOverTracker() {
                   <thead><tr><th>Pour</th><th>Target</th><th>Actual</th><th>Δ</th><th>Speed</th><th>Pause →</th></tr></thead>
                   <tbody>
                     {recipe.pours.map((p,i)=>{
-                      // target for this pour = cumulative target minus previous cumulative
                       const prevTarget = i>0 ? recipe.pours[i-1].targetWater : 0;
                       const pourTarget = p.targetWater - prevTarget;
                       const pourActual = getWaterPoured(i, lastActualPours);
@@ -564,90 +560,165 @@ export default function PourOverTracker() {
               <button className="bb go" onClick={startBrew}>Start Brewing ☕</button>
 
             </>:<>
-              {/* ── ACTIVE BREW — compact rows ── */}
+              {/* ── SINGLE CLOCK BREW UI ── */}
+              {(()=>{
+                const POUR_COLORS = ["#c4843a","#8b5a2b","#5a3a1a","#a07040","#7a5030"];
+                const totalBrewTime = Math.max(...recipe.pours.map(p=>p.startTime+p.duration), 1);
+                const cx=130, cy=130, r=110, stroke=14;
+                const circ = 2*Math.PI*r;
+                const toAngle = (s) => (s/totalBrewTime)*360 - 90;
+                const polarToXY = (angle, radius) => {
+                  const rad = (angle * Math.PI)/180;
+                  return { x: cx + radius*Math.cos(rad), y: cy + radius*Math.sin(rad) };
+                };
+                const arcPath = (startS, endS, color) => {
+                  const a1 = toAngle(startS), a2 = toAngle(endS);
+                  const p1 = polarToXY(a1, r), p2 = polarToXY(a2, r);
+                  const large = (endS - startS)/totalBrewTime > 0.5 ? 1 : 0;
+                  return `M ${p1.x} ${p1.y} A ${r} ${r} 0 ${large} 1 ${p2.x} ${p2.y}`;
+                };
+                const markerLine = (timeS, color, width=3) => {
+                  const angle = toAngle(timeS);
+                  const inner = polarToXY(angle, r - stroke - 4);
+                  const outer = polarToXY(angle, r + stroke + 4);
+                  return <line key={timeS+color} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke={color} strokeWidth={width} strokeLinecap="round"/>;
+                };
 
-              {/* Top header bar: total time + current pour highlight */}
-              <div className="brew-header">
-                <div>
-                  <div className="brew-header-time">{formatTime(totalTimer)}</div>
-                  <div className="brew-header-lbl">Total elapsed</div>
-                </div>
-                {activePour&&<div className="brew-header-active">
-                  <div className="brew-header-step">▶ {activePour.label}</div>
-                  <div className="brew-header-target">→{activePour.targetWater}ml · @{formatTime(activePour.startTime)}</div>
-                </div>}
-              </div>
+                const elapsed = totalTimer;
+                const progressAngle = Math.min(elapsed/totalBrewTime, 1)*360;
+                const activePour = brewDone ? null : recipe.pours[activeStep];
+                const ap = brewDone ? null : (actualPours[activeStep]||{});
+                const hasSnapped = ap && ap.pourStopTime != null;
+                const prevTarget = activeStep > 0 ? recipe.pours[activeStep-1].targetWater : 0;
+                const pourTarget = activePour ? activePour.targetWater - prevTarget : 0;
+                const pourActual = getWaterPoured(activeStep, actualPours);
+                const hasDiff = pourActual != null && pourActual !== pourTarget;
 
-              {/* Pour rows */}
-              <div className="brew-rows">
-                {recipe.pours.map((p,i)=>{
-                  const t=timers[i]||{elapsed:0,running:false,done:false};
-                  const deg=Math.min((t.elapsed/p.duration)*360,360);
-                  const isActive=i===activeStep, isDone=t.done;
-                  const ringColor=isActive?"#8b5a2b":isDone?"#6aab6a":"#d4c4b0";
-                  const ap=actualPours[i]||{water:p.targetWater};
-                  const speed=getPourSpeed(i, actualPours);
-                  const showInputs=isActive||isDone;
-                  const showSnap=showInputs&&ap.pourStopTime==null;
-                  // incremental: what the scale should read vs what it does read
-                  const prevTarget = i > 0 ? recipe.pours[i-1].targetWater : 0;
-                  const pourTarget = p.targetWater - prevTarget;
-                  const pourActual = getWaterPoured(i, actualPours);
-                  const hasDiff = pourActual != null && pourActual !== pourTarget;
+                return <>
+                  <div className="brew-clock-wrap">
+                    <svg className="brew-clock-svg" viewBox="0 0 260 260">
+                      {/* Background ring */}
+                      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f0ebe3" strokeWidth={stroke}/>
 
-                  return(
-                    <div key={i} className={`brew-row ${isActive?"act":isDone?"done":"waiting"}`}>
-                      {/* Always-visible top row */}
-                      <div className="brew-row-top">
-                        <div className="mini-ring" style={{background:`conic-gradient(${ringColor} ${deg}deg,#e8ddd0 ${deg}deg)`}}>
-                          <div className="mini-ring-inner">
-                            <div className="mini-ring-time">{formatTime(t.elapsed)}</div>
-                          </div>
-                        </div>
-                        <div className={`brew-row-name${isActive?" act-name":""}`}>{p.label}</div>
-                        <div className="brew-row-meta">+{pourTarget}ml → {p.targetWater}ml</div>
-                        <span className={`brew-row-badge ${isActive?"badge-now":isDone?"badge-done":"badge-wait"}`}>
-                          {isActive?"NOW":isDone?"✓":"wait"}
-                        </span>
-                      </div>
+                      {/* Pour target zones */}
+                      {recipe.pours.map((p,i)=>(
+                        <path key={i} d={arcPath(p.startTime, p.startTime+p.duration, POUR_COLORS[i%POUR_COLORS.length])}
+                          fill="none" stroke={POUR_COLORS[i%POUR_COLORS.length]} strokeWidth={stroke} opacity={0.25} strokeLinecap="butt"/>
+                      ))}
 
-                      {/* Expanded inputs for active/done */}
-                      {showInputs&&<>
-                        <div className="brew-row-inputs">
-                          <div className="mini-field">
-                            <div className="mini-lbl">Scale reading (ml)</div>
-                            <input className={`mini-inp${hasDiff?" diff":""}`} type="number"
-                              value={ap.water??p.targetWater} onChange={e=>updateActual(i,"water",e.target.value)}/>
-                          </div>
-                          <div className="mini-field">
-                            <div className="mini-lbl">Start (s)</div>
-                            <input className="mini-inp" type="number" readOnly value={ap.pourStartTime??""} placeholder="—"/>
-                          </div>
-                          <div className="mini-field">
-                            <div className="mini-lbl">Stop (s)</div>
-                            <input className="mini-inp" type="number"
-                              value={ap.pourStopTime??""} placeholder="—"
-                              onChange={e=>updateActual(i,"pourStopTime",e.target.value)}/>
-                          </div>
-                          {showSnap
-                            ? <button className="snap-btn" onClick={()=>snapStop(i)}>⏱ Snap</button>
-                            : <div/>
-                          }
-                        </div>
-                        {speed&&<div className="speed-pill">⚡ {speed} ml/s pour speed</div>}
+                      {/* Elapsed progress arc */}
+                      {elapsed>0&&(()=>{
+                        const endAngle = toAngle(Math.min(elapsed, totalBrewTime));
+                        const startPt = polarToXY(-90, r);
+                        const endPt = polarToXY(endAngle, r);
+                        const large = elapsed/totalBrewTime > 0.5 ? 1 : 0;
+                        const activeColor = brewDone ? "#6aab6a" : (POUR_COLORS[activeStep%POUR_COLORS.length]||"#8b5a2b");
+                        return <path d={`M ${startPt.x} ${startPt.y} A ${r} ${r} 0 ${large} 1 ${endPt.x} ${endPt.y}`}
+                          fill="none" stroke={activeColor} strokeWidth={stroke} strokeLinecap="round" opacity={0.85}/>;
+                      })()}
+
+                      {/* Pour start tick marks */}
+                      {recipe.pours.map((p,i)=>i>0&&(()=>{
+                        const angle = toAngle(p.startTime);
+                        const inner = polarToXY(angle, r-stroke/2-2);
+                        const outer = polarToXY(angle, r+stroke/2+2);
+                        return <line key={i} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y}
+                          stroke="#fff" strokeWidth={2.5} strokeLinecap="round"/>;
+                      })())}
+
+                      {/* Snap marks (grey) and continue marks (red) */}
+                      {snapMarks.map((m,i)=>markerLine(m.time, m.type==='snap'?'#9aadba':'#e07a5f', 4))}
+
+                      {/* 12 o'clock dot */}
+                      <circle cx={cx} cy={cy-r} r={4} fill="#c4a882"/>
+
+                      {/* Centre face */}
+                      <circle cx={cx} cy={cy} r={r-stroke-6} fill="#fffdf9"/>
+
+                      {/* Elapsed time */}
+                      <text x={cx} y={brewDone?cy-18:cy-8} className="brew-clock-centre-time">{formatTime(elapsed)}</text>
+
+                      {/* Pour name */}
+                      {!brewDone&&activePour&&<>
+                        <text x={cx} y={cy+18} className="brew-clock-centre-pour">{activePour.label}</text>
+                        <text x={cx} y={cy+34} className="brew-clock-centre-grams">+{pourTarget}ml → {activePour.targetWater}ml</text>
                       </>}
-                    </div>
-                  );
-                })}
-              </div>
+                      {brewDone&&<>
+                        <text x={cx} y={cy+14} className="brew-clock-centre-pour">Drawdown</text>
+                        <text x={cx} y={cy+30} className="brew-clock-centre-grams">tap done when empty</text>
+                      </>}
+                    </svg>
 
-              {/* Always-visible action buttons */}
-              <div className="brew-actions">
-                <button className="bb nx" onClick={advanceStep}>
-                  {activeStep<recipe.pours.length-1?`Next: ${recipe.pours[activeStep+1]?.label} →`:"Finish Brew ✓"}
-                </button>
-                <button className="bb st" onClick={stopBrew}>Stop</button>
-              </div>
+                    {/* Legend */}
+                    <div className="brew-legend">
+                      {recipe.pours.map((p,i)=>(
+                        <div key={i} className="brew-legend-item">
+                          <div className="brew-legend-dot" style={{background:POUR_COLORS[i%POUR_COLORS.length]}}/>
+                          {p.label} {p.targetWater}ml
+                        </div>
+                      ))}
+                      <div className="brew-legend-item"><div className="brew-legend-dot" style={{background:"#9aadba"}}/> Stop</div>
+                      <div className="brew-legend-item"><div className="brew-legend-dot" style={{background:"#e07a5f"}}/> Next start</div>
+                    </div>
+                  </div>
+
+                  {/* Status + actual input */}
+                  {!brewDone&&activePour&&<div className="brew-status">
+                    <div className="brew-status-step">▶ {activePour.label}</div>
+                    <div className="brew-status-meta">target: +{pourTarget}ml · start @{formatTime(activePour.startTime)} · dur {formatTime(activePour.duration)}</div>
+                    <div className="brew-actual-inp">
+                      <div className="brew-actual-field">
+                        <div className="brew-actual-lbl">Scale (ml)</div>
+                        <input className={`mini-inp${hasDiff?" diff":""}`} type="number"
+                          value={ap.water??activePour.targetWater}
+                          onChange={e=>{ const u=[...actualPours]; u[activeStep]={...u[activeStep],water:e.target.value===""?null:Number(e.target.value)}; setActualPours(u); }}/>
+                      </div>
+                    </div>
+                  </div>}
+
+                  {/* Drawdown summary */}
+                  {brewDone&&<>
+                    <div className="brew-drawdown">⏱ drawdown in progress…</div>
+                    <div className="card">
+                      <div className="ct"><span>Brew Summary</span></div>
+                      <table className="summary-table">
+                        <thead><tr><th>Pour</th><th>Target</th><th>Actual</th><th>Δ</th><th>Speed</th><th>Pause →</th></tr></thead>
+                        <tbody>
+                          {recipe.pours.map((p,i)=>{
+                            const prev = i>0?recipe.pours[i-1].targetWater:0;
+                            const pt = p.targetWater-prev;
+                            const pa = getWaterPoured(i, lastActualPours);
+                            const diff = pa!=null?pa-pt:null;
+                            const speed = getPourSpeed(i, lastActualPours);
+                            const pause = getPause(i, lastActualPours);
+                            return <tr key={i}>
+                              <td>{p.label}</td><td>{pt}ml</td>
+                              <td>{pa!=null?`${pa}ml`:"—"}</td>
+                              <td className={diff>0?"diff-over":diff<0?"diff-under":""}>{diff!=null?(diff>0?`+${diff}`:diff)+"ml":"—"}</td>
+                              <td>{speed?`${speed}ml/s`:"—"}</td>
+                              <td>{pause!=null?`${pause}s`:i<recipe.pours.length-1?"—":"end"}</td>
+                            </tr>;
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>}
+
+                  {/* Action buttons */}
+                  <div className="brew-actions">
+                    {!brewDone&&<>
+                      {!hasSnapped
+                        ? <button className="bb snap" onClick={handleSnap}>⏱ Snap Stop</button>
+                        : <button className="bb nx" onClick={handleContinue}>
+                            {activeStep<recipe.pours.length-1?`Continue → ${recipe.pours[activeStep+1]?.label}`:"Finish Pour ✓"}
+                          </button>
+                      }
+                    </>}
+                    {brewDone&&<button className="bb done-btn" onClick={finishDrawdown}>✓ Done — Record Brew</button>}
+                    <button className="bb st" onClick={stopBrew}>Abandon</button>
+                  </div>
+                </>;
+              })()}
             </>}
           </>}
 
