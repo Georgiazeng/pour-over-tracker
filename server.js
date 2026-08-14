@@ -69,97 +69,272 @@ app.get("/timemore/:workId", async (req, res) => {
 // ── Pour segmentation algorithm ───────────────────────────────────────────────
 function segmentPours(triples) {
   // triples: [[time_ms, flow_rate_str, cumulative_weight_str], ...]
-  const points = triples.map(t => ({ ms: Number(t[0]), w: parseFloat(t[2]) }));
+  const points = triples.map(t => ({
+    ms: Number(t[0]),
+    w: parseFloat(t[2])
+  }));
 
-  if (points.length === 0) return { pours: [], totalWater: 0, totalTime: 0 };
+  if (points.length === 0) {
+    return { pours: [], totalWater: 0, totalTime: 0 };
+  }
 
-  // Step 1: Smooth out transient spikes (weight jumps >5g that reverse within 3 samples)
+  // ────────────────────────────────────────────────────────────────────────────
+  // Step 1: Smooth out large transient spikes
+  // ────────────────────────────────────────────────────────────────────────────
   const smoothed = points.map((p, i) => {
     if (i === 0 || i >= points.length - 2) return p;
+
     const prev = points[i - 1].w;
     const next1 = points[i + 1].w;
-    const next2 = points[i + 2]?.w ?? next1;
     const delta = p.w - prev;
     const recovery = next1 - p.w;
-    // If big spike that immediately reverses, replace with interpolated value
-    if (Math.abs(delta) > 5 && Math.sign(recovery) === -Math.sign(delta)) {
-      return { ms: p.ms, w: (prev + next1) / 2 };
+
+    // If there is a large spike that immediately reverses,
+    // replace it with an interpolated value.
+    if (
+      Math.abs(delta) > 5 &&
+      Math.sign(recovery) === -Math.sign(delta)
+    ) {
+      return {
+        ms: p.ms,
+        w: (prev + next1) / 2
+      };
     }
+
     return p;
   });
 
-  // Step 2: Identify "pouring" windows — consecutive samples where weight rises meaningfully
-  // A pour is active when delta over 500ms window is > 0.3g
-  const WINDOW_MS = 500;
-  const POUR_THRESHOLD = 0.3;        // g gained over the window to count as pouring
-  const PLATEAU_MIN_DURATION_MS = 2000; // plateau must last 2s to count as a break
-  const JITTER_GAP_MS = 1500;        // gaps < 1.5s within a pour are tolerated as jitter
+  // ────────────────────────────────────────────────────────────────────────────
+  // Step 2: Parameters
+  // ────────────────────────────────────────────────────────────────────────────
 
-  // Build per-point "rising" flag using a lookahead window
+  // Look ahead this far to decide whether weight is actually increasing.
+  const WINDOW_MS = 500;
+
+  // Minimum cumulative increase over WINDOW_MS to count as active pouring.
+  const POUR_THRESHOLD = 0.3;
+
+  // Small scale fluctuations below this are treated as noise.
+  const NOISE_TOLERANCE = 0.2;
+
+  // A plateau must last this long before it is considered a real
+  // separation between pours.
+  const PLATEAU_MIN_DURATION_MS = 2000;
+
+  // Short interruptions during an otherwise continuous pour are tolerated.
+  const JITTER_GAP_MS = 1500;
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Step 3: Identify "rising" windows
+  // ────────────────────────────────────────────────────────────────────────────
   const rising = smoothed.map((p, i) => {
     const tEnd = p.ms + WINDOW_MS;
-    const future = smoothed.filter(q => q.ms > p.ms && q.ms <= tEnd);
+
+    const future = smoothed.filter(
+      q => q.ms > p.ms && q.ms <= tEnd
+    );
+
     if (future.length === 0) return false;
+
     const maxAhead = Math.max(...future.map(q => q.w));
-    return maxAhead - p.w > POUR_THRESHOLD;
+
+    // Only count meaningful increases.
+    // ±0.1–0.2g scale fluctuations do not count as pouring.
+    return (maxAhead - p.w) > POUR_THRESHOLD;
   });
 
-  // Step 3: Merge short gaps in rising regions (jitter tolerance)
+  // ────────────────────────────────────────────────────────────────────────────
+  // Step 4: Merge short gaps caused by scale noise
+  // ────────────────────────────────────────────────────────────────────────────
   const merged = [...rising];
+
   for (let i = 1; i < smoothed.length - 1; i++) {
     if (!merged[i]) {
-      const gapEnd = smoothed.findIndex((p, j) => j > i && merged[j]);
+      const gapEnd = smoothed.findIndex(
+        (p, j) => j > i && merged[j]
+      );
+
       if (gapEnd !== -1) {
-        const gapDuration = smoothed[gapEnd].ms - smoothed[i - 1].ms;
+        const gapDuration =
+          smoothed[gapEnd].ms - smoothed[i - 1].ms;
+
         if (gapDuration < JITTER_GAP_MS) {
-          for (let k = i; k < gapEnd; k++) merged[k] = true;
+          for (let k = i; k < gapEnd; k++) {
+            merged[k] = true;
+          }
         }
       }
     }
   }
 
-  // Step 4: Extract contiguous "rising" segments
+  // ────────────────────────────────────────────────────────────────────────────
+  // Step 5: Extract pour segments
+  // ────────────────────────────────────────────────────────────────────────────
   const segments = [];
+
   let inPour = false;
   let pourStart = 0;
 
   for (let i = 0; i < smoothed.length; i++) {
+    // Start of a pour
     if (merged[i] && !inPour) {
       inPour = true;
       pourStart = i;
-    } else if (!merged[i] && inPour) {
-      // Check that the plateau after this is long enough (real break, not jitter)
-      const plateauStart = smoothed[i].ms;
-      const nextRising = smoothed.findIndex((p, j) => j > i && merged[j]);
-      const plateauEnd = nextRising !== -1 ? smoothed[nextRising].ms : smoothed[smoothed.length - 1].ms;
-      const plateauDuration = plateauEnd - plateauStart;
+      continue;
+    }
 
-      if (plateauDuration >= PLATEAU_MIN_DURATION_MS || nextRising === -1) {
-        // Real plateau — commit the pour
-        segments.push({ startIdx: pourStart, endIdx: i - 1 });
+    // Potential end of a pour
+    if (!merged[i] && inPour) {
+      const plateauStart = smoothed[i].ms;
+
+      const nextRising = smoothed.findIndex(
+        (p, j) => j > i && merged[j]
+      );
+
+      const plateauEnd =
+        nextRising !== -1
+          ? smoothed[nextRising].ms
+          : smoothed[smoothed.length - 1].ms;
+
+      const plateauDuration =
+        plateauEnd - plateauStart;
+
+      if (
+        plateauDuration >= PLATEAU_MIN_DURATION_MS ||
+        nextRising === -1
+      ) {
+        // ─────────────────────────────────────────────────────────────────────
+        // IMPORTANT:
+        //
+        // Do not automatically use i - 1 as the pour endpoint.
+        //
+        // The scale can fluctuate:
+        //
+        //   32.3
+        //   32.4
+        //   32.5  <- actual end of pouring
+        //   32.4
+        //   32.5
+        //   32.4
+        //
+        // The final points are scale noise, not additional pouring.
+        //
+        // Find the highest meaningful weight reached before the plateau.
+        // ─────────────────────────────────────────────────────────────────────
+
+        let endIdx = i - 1;
+        let maxWeight = smoothed[endIdx].w;
+
+        for (let j = i - 1; j >= pourStart; j--) {
+          const weight = smoothed[j].w;
+
+          // If this point is meaningfully higher, use it as the endpoint.
+          if (weight > maxWeight + NOISE_TOLERANCE) {
+            maxWeight = weight;
+            endIdx = j;
+          }
+        }
+
+        // More robustly, find the LAST point that is within the noise
+        // tolerance of the maximum weight reached during the pour.
+        //
+        // This prevents a tiny 0.1–0.2g fluctuation from moving the endpoint.
+        const stableMaxWeight = maxWeight;
+
+        for (let j = i - 1; j >= pourStart; j--) {
+          if (
+            stableMaxWeight - smoothed[j].w <= NOISE_TOLERANCE
+          ) {
+            endIdx = j;
+          } else {
+            break;
+          }
+        }
+
+        segments.push({
+          startIdx: pourStart,
+          endIdx
+        });
+
         inPour = false;
       }
-      // else: short gap — don't split the pour (handled by merge above, but catch edge cases)
     }
   }
-  if (inPour) segments.push({ startIdx: pourStart, endIdx: smoothed.length - 1 });
 
-  // Step 5: Build pour objects
-  const pourLabels = ["Bloom", "2nd Pour", "3rd Pour", "4th Pour", "5th Pour"];
+  // Close final pour
+  if (inPour) {
+    let endIdx = smoothed.length - 1;
+
+    // Find maximum weight during final pour.
+    let maxWeight = smoothed[endIdx].w;
+
+    for (let j = endIdx - 1; j >= pourStart; j--) {
+      if (smoothed[j].w > maxWeight) {
+        maxWeight = smoothed[j].w;
+        endIdx = j;
+      }
+    }
+
+    // Move endpoint backward through insignificant fluctuations.
+    for (let j = endIdx - 1; j >= pourStart; j--) {
+      if (
+        maxWeight - smoothed[j].w <= NOISE_TOLERANCE
+      ) {
+        endIdx = j;
+      } else {
+        break;
+      }
+    }
+
+    segments.push({
+      startIdx: pourStart,
+      endIdx
+    });
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Step 6: Build pour objects
+  // ────────────────────────────────────────────────────────────────────────────
+  const pourLabels = [
+    "Bloom",
+    "2nd Pour",
+    "3rd Pour",
+    "4th Pour",
+    "5th Pour"
+  ];
 
   const pours = segments.map((seg, idx) => {
     const startPt = smoothed[seg.startIdx];
     const endPt = smoothed[seg.endIdx];
 
-    // Weight at start of this pour = cumulative scale reading just before pouring began
-    // Volume added = endPt.w - (previous segment's end weight or 0)
-    const prevEnd = idx > 0 ? smoothed[segments[idx - 1].endIdx].w : 0;
-    const volume = Math.round((endPt.w - prevEnd) * 10) / 10;
+    // Previous stable endpoint.
+    const prevEnd =
+      idx > 0
+        ? smoothed[segments[idx - 1].endIdx].w
+        : 0;
 
-    const startSec = Math.round(startPt.ms / 100) / 10;
-    const endSec = Math.round(endPt.ms / 100) / 10;
-    const durationSec = Math.round((endPt.ms - startPt.ms) / 100) / 10;
-    const avgSpeed = durationSec > 0 ? Math.round((volume / durationSec) * 10) / 10 : 0;
+    const volume =
+      Math.round(
+        (endPt.w - prevEnd) * 10
+      ) / 10;
+
+    const startSec =
+      Math.round(startPt.ms / 100) / 10;
+
+    const endSec =
+      Math.round(endPt.ms / 100) / 10;
+
+    const durationSec =
+      Math.round(
+        (endPt.ms - startPt.ms) / 100
+      ) / 10;
+
+    const avgSpeed =
+      durationSec > 0
+        ? Math.round(
+            (volume / durationSec) * 10
+          ) / 10
+        : 0;
 
     return {
       label: pourLabels[idx] || `Pour ${idx + 1}`,
@@ -167,16 +342,37 @@ function segmentPours(triples) {
       endSec,
       durationSec,
       volume,
-      cumulativeWater: Math.round(endPt.w * 10) / 10,
-      avgSpeedGps: avgSpeed,
+      cumulativeWater:
+        Math.round(endPt.w * 10) / 10,
+      avgSpeedGps: avgSpeed
     };
   });
 
-  const totalTime = smoothed.length > 0 ? Math.round(smoothed[smoothed.length - 1].ms / 100) / 10 : 0;
-  const totalWater = smoothed.length > 0 ? Math.round(smoothed[smoothed.length - 1].w * 10) / 10 : 0;
+  // ────────────────────────────────────────────────────────────────────────────
+  // Step 7: Overall brew information
+  // ────────────────────────────────────────────────────────────────────────────
+  const totalTime =
+    smoothed.length > 0
+      ? Math.round(
+          smoothed[smoothed.length - 1].ms / 100
+        ) / 10
+      : 0;
 
-  return { pours, totalWater, totalTime };
+  const totalWater =
+    smoothed.length > 0
+      ? Math.round(
+          smoothed[smoothed.length - 1].w * 10
+        ) / 10
+      : 0;
+
+  return {
+    pours,
+    totalWater,
+    totalTime
+  };
 }
+
+
 
 // ── GET /notion-beans ─────────────────────────────────────────────────────────
 // Filtered to Status = "Using"
