@@ -3,36 +3,131 @@ import { useState, useEffect, useRef } from "react";
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Mono:wght@300;400&family=Lora:ital@0;1&display=swap');`;
 
 const defaultRecipe = {
-  name: "My Pour Over", coffee: 14, grindSize: 20.0, waterTemp: 93, targetTime: 210,
-  pours: [
-    { label: "Bloom",    targetWater: 40,  startTime: 0,  stirMethod: "None",  flowStyle: "Center" },
-    { label: "1st Pour", targetWater: 105, startTime: 30, stirMethod: "Swirl", flowStyle: "Spiral" },
-    { label: "2nd Pour", targetWater: 210, startTime: 75, stirMethod: "None",  flowStyle: "Center" },
-  ],
+  name: "My Brew",
+  coffee: 15, grindSize: 20.0, waterTemp: 93,
   notes: "", tastingNotes: [], roast: "Light",
   equipment: { brewTool: "", grinder: "", waterSource: "", tds: "", hardness: "", waterNotes: "" },
   bean: { origin: "", variety: "", altitude: "", process: "", roastDate: "", roaster: "", lot: "", descriptors: "", impression: "" },
   sensory: { overall: 0, balance: 0, clarity: 0, body: 0, aroma: 0, acidity: 0, sweetness: 0, bitterness: 0, aftertaste: 0, floral: 0, fruity: 0, teaLike: 0 },
+  // Timemore brew data
+  workId: "", pours: [], totalWater: 0, totalTime: 0, rawPoints: [],
 };
 
 const TASTING_OPTIONS = ["Floral","Fruity","Citrus","Berry","Stone Fruit","Nutty","Chocolatey","Caramel","Spicy","Earthy","Bright","Balanced","Smooth","Sweet","Complex"];
 const ROASTS = ["Light","Light-Medium","Medium","Medium-Dark","Dark"];
-const STIR_METHODS = ["None","Slow Circular","Quick Circular","Swirl","Stir","Rao Spin","Gentle Tap"];
-const FLOW_STYLES  = ["Center","Slow Circular","Quick Circular","Circular then Centre","Spiral","Fast","Slow Centre","Mixed"];
 const WATER_SOURCES = ["Filtered","Bottled","Third Wave Water","RO + Minerals","Tap","Other"];
 const SENSORY_FIELDS = [
-  ["overall","Overall Score"],["balance","Balance"],["clarity","Clarity"],
-  ["body","Body"],["aroma","Aroma"],["acidity","Acidity"],
-  ["sweetness","Sweetness"],["bitterness","Bitterness"],["aftertaste","Aftertaste"],
-  ["floral","Floral"],["fruity","Fruity"],["teaLike","Tea-like"],
+  ["overall","Overall"],["balance","Balance"],["clarity","Clarity"],["body","Body"],
+  ["aroma","Aroma"],["acidity","Acidity"],["sweetness","Sweetness"],["bitterness","Bitterness"],
+  ["aftertaste","Aftertaste"],["floral","Floral"],["fruity","Fruity"],["teaLike","Tea-like"],
 ];
 
 function formatTime(s) {
   if (s == null || s === "") return "—";
-  const m = Math.floor(s / 60), sec = s % 60;
+  const m = Math.floor(s / 60), sec = (s % 60).toFixed(0);
   return m > 0 ? `${m}:${sec.toString().padStart(2,"0")}` : `${s}s`;
 }
 
+// ── Weight Chart ──────────────────────────────────────────────────────────────
+function WeightChart({ rawPoints, pours }) {
+  if (!rawPoints || rawPoints.length === 0) return null;
+
+  const W = 680, H = 220, PAD = { top: 16, right: 20, bottom: 36, left: 44 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+
+  const maxMs = rawPoints[rawPoints.length - 1][0];
+  const maxW = Math.max(...rawPoints.map(p => p[1])) * 1.05;
+
+  const xScale = ms => (ms / maxMs) * chartW;
+  const yScale = w => chartH - (w / maxW) * chartH;
+
+  // Build SVG path
+  const pathD = rawPoints.map((p, i) =>
+    `${i === 0 ? "M" : "L"} ${xScale(p[0]).toFixed(1)} ${yScale(p[1]).toFixed(1)}`
+  ).join(" ");
+
+  // X axis ticks every 30s
+  const tickInterval = 30;
+  const maxSec = maxMs / 1000;
+  const ticks = [];
+  for (let t = 0; t <= maxSec; t += tickInterval) ticks.push(t);
+
+  const POUR_COLORS = ["#c4843a","#8b5a2b","#5a3a1a","#a07040","#7a5030"];
+
+  return (
+    <div style={{overflowX:"auto",marginBottom:4}}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",maxWidth:W,display:"block"}}>
+        <g transform={`translate(${PAD.left},${PAD.top})`}>
+          {/* Pour band backgrounds */}
+          {pours.map((p, i) => (
+            <rect key={i}
+              x={xScale(p.startSec * 1000).toFixed(1)}
+              y={0} height={chartH}
+              width={Math.max(1, xScale((p.endSec - p.startSec) * 1000)).toFixed(1)}
+              fill={POUR_COLORS[i % POUR_COLORS.length]}
+              opacity={0.08}/>
+          ))}
+
+          {/* Grid lines */}
+          {[0, 0.25, 0.5, 0.75, 1].map(f => (
+            <line key={f} x1={0} x2={chartW} y1={(f * chartH).toFixed(1)} y2={(f * chartH).toFixed(1)}
+              stroke="#e8ddd0" strokeWidth={1} strokeDasharray={f === 1 || f === 0 ? "0" : "3,3"}/>
+          ))}
+
+          {/* Weight trace */}
+          <path d={pathD} fill="none" stroke="#8b5a2b" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"/>
+
+          {/* Pour vertical markers */}
+          {pours.map((p, i) => (
+            <g key={i}>
+              <line x1={xScale(p.startSec * 1000).toFixed(1)} x2={xScale(p.startSec * 1000).toFixed(1)}
+                y1={0} y2={chartH} stroke={POUR_COLORS[i % POUR_COLORS.length]} strokeWidth={1.5} strokeDasharray="4,3" opacity={0.7}/>
+              <text x={xScale(p.startSec * 1000) + 3} y={12}
+                style={{fontFamily:"'DM Mono',monospace",fontSize:9,fill:POUR_COLORS[i % POUR_COLORS.length]}}>
+                {p.label}
+              </text>
+            </g>
+          ))}
+
+          {/* X axis */}
+          <line x1={0} x2={chartW} y1={chartH} y2={chartH} stroke="#c4a882" strokeWidth={1}/>
+          {ticks.map(t => (
+            <g key={t}>
+              <line x1={xScale(t * 1000).toFixed(1)} x2={xScale(t * 1000).toFixed(1)}
+                y1={chartH} y2={chartH + 4} stroke="#c4a882" strokeWidth={1}/>
+              <text x={xScale(t * 1000).toFixed(1)} y={chartH + 14}
+                style={{fontFamily:"'DM Mono',monospace",fontSize:9,fill:"#8b6a4a",textAnchor:"middle"}}>
+                {formatTime(t)}
+              </text>
+            </g>
+          ))}
+
+          {/* Y axis */}
+          <line x1={0} x2={0} y1={0} y2={chartH} stroke="#c4a882" strokeWidth={1}/>
+          {[0, 0.25, 0.5, 0.75, 1].map(f => (
+            <text key={f} x={-5} y={yScale(f * maxW) + 3}
+              style={{fontFamily:"'DM Mono',monospace",fontSize:9,fill:"#8b6a4a",textAnchor:"end"}}>
+              {Math.round(f * maxW)}
+            </text>
+          ))}
+
+          {/* Axis labels */}
+          <text x={chartW / 2} y={chartH + 30}
+            style={{fontFamily:"'DM Mono',monospace",fontSize:9,fill:"#8b6a4a",textAnchor:"middle",letterSpacing:".1em",textTransform:"uppercase"}}>
+            Time
+          </text>
+          <text transform={`translate(-34,${chartH/2}) rotate(-90)`}
+            style={{fontFamily:"'DM Mono',monospace",fontSize:9,fill:"#8b6a4a",textAnchor:"middle",letterSpacing:".1em"}}>
+            Weight (g)
+          </text>
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+// ── Score Slider ──────────────────────────────────────────────────────────────
 function ScoreSlider({ label, value, onChange }) {
   return (
     <div style={{marginBottom:14}}>
@@ -53,6 +148,7 @@ function ScoreSlider({ label, value, onChange }) {
   );
 }
 
+// ── CSS ───────────────────────────────────────────────────────────────────────
 const css = `
 ${FONTS}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -86,66 +182,9 @@ h1 em{font-style:italic;color:#8b5a2b}
 .stat{flex:1;min-width:60px;background:linear-gradient(135deg,#f0e8dc,#e8ddd0);border-radius:14px;padding:12px 8px;text-align:center}
 .sv{font-family:'Playfair Display',serif;font-size:1.1rem;color:#2c1a0e}
 .sl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.12em;color:#8b6a4a;text-transform:uppercase;margin-top:2px}
-.ph{display:grid;grid-template-columns:1fr 70px 70px 32px;gap:5px;margin-bottom:6px;align-items:center}
-.plbl{font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.08em;text-align:center}
-.pr{background:#faf7f3;border:1.5px solid #e0d4c4;border-radius:11px;padding:8px 10px;margin-bottom:9px}
-.pr-top{display:grid;grid-template-columns:1fr 70px 70px 32px;gap:5px;align-items:center;margin-bottom:6px}
-.pr-bot{display:flex;align-items:center;gap:6px;margin-bottom:5px}
-.pr-lbl{font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}
-.pr input{padding:7px 4px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:13px;color:#2c1a0e;background:#fff;outline:none;width:100%;transition:border-color .18s;text-align:center;min-width:0;box-sizing:border-box}
-.pr input:focus{border-color:#8b5a2b;background:#fff}
-.pr select{flex:1;padding:7px 8px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'Lora',serif;font-size:12px;color:#2c1a0e;background:#fff;outline:none;-webkit-appearance:none;appearance:none;min-width:0}
-.db{background:none;border:1.5px solid #e8d4bc;border-radius:8px;width:32px;height:32px;min-width:32px;color:#c4a882;cursor:pointer;font-size:15px;transition:all .15s;display:flex;align-items:center;justify-content:center}
-.db:hover{border-color:#e07a5f;color:#e07a5f}
-.ab{width:100%;padding:10px;border:2px dashed #d4b896;border-radius:12px;background:transparent;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;color:#8b6a4a;cursor:pointer;transition:all .18s;text-transform:uppercase;margin-top:4px}
-.ab:hover{border-color:#8b5a2b;color:#8b5a2b}
 .tc{display:flex;flex-wrap:wrap;gap:7px}
 .chip{padding:6px 12px;border-radius:20px;border:1.5px solid #e0d4c4;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;cursor:pointer;transition:all .15s;background:#faf7f3;color:#8b6a4a;text-transform:uppercase}
 .chip.on{background:#2c1a0e;border-color:#2c1a0e;color:#f5efe6}
-
-/* ── BREW TAB: single clock ── */
-.brew-clock-wrap{display:flex;flex-direction:column;align-items:center;margin-bottom:16px}
-.brew-clock-svg{width:260px;height:260px;overflow:visible}
-.brew-clock-centre-time{font-family:'Playfair Display',serif;font-size:2rem;fill:#1a0d00;text-anchor:middle;dominant-baseline:middle}
-.brew-clock-centre-pour{font-family:'DM Mono',monospace;font-size:11px;fill:#8b5a2b;text-anchor:middle;letter-spacing:.1em;text-transform:uppercase}
-.brew-clock-centre-grams{font-family:'DM Mono',monospace;font-size:10px;fill:#c4a882;text-anchor:middle}
-.brew-legend{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:14px}
-.brew-legend-item{display:flex;align-items:center;gap:5px;font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.08em}
-.brew-legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-.brew-status{background:#fffdf9;border-radius:16px;padding:14px 18px;box-shadow:0 2px 12px rgba(44,26,14,.06),0 0 0 1px rgba(212,165,116,.2);margin-bottom:12px;text-align:center}
-.brew-status-step{font-family:'Lora',serif;font-size:1.2rem;color:#2c1a0e;margin-bottom:4px}
-.brew-status-meta{font-family:'DM Mono',monospace;font-size:10px;color:#8b6a4a;letter-spacing:.08em}
-.brew-actual-inp{display:flex;align-items:center;gap:10px;justify-content:center;margin-top:10px}
-.brew-actual-lbl{font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.1em}
-.brew-actual-field{display:flex;flex-direction:column;align-items:center;gap:3px}
-.mini-inp{width:80px;padding:8px 8px;border:1.5px solid #e0d4c4;border-radius:9px;font-family:'DM Mono',monospace;font-size:14px;color:#2c1a0e;background:#faf7f3;outline:none;text-align:center;transition:border-color .18s}
-.mini-inp:focus{border-color:#8b5a2b;background:#fff}
-.mini-inp.diff{border-color:#e07a5f;color:#e07a5f}
-.mini-inp[readonly]{background:#f0ece6;color:#8b6a4a}
-.snap-btn{padding:10px 20px;border:2px solid #d4a574;border-radius:12px;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8b5a2b;background:#fff8f0;cursor:pointer;transition:all .15s;white-space:nowrap}
-.snap-btn:hover{background:#f5e6d0;border-color:#8b5a2b}
-.snap-btn:active{transform:scale(.97)}
-.brew-actions{display:flex;flex-direction:column;gap:8px}
-.bb{width:100%;padding:15px;border-radius:16px;border:none;cursor:pointer;font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:600;transition:all .2s}
-.bb.go{background:#2c1a0e;color:#f5efe6}.bb.go:hover{background:#3d2510;transform:translateY(-1px);box-shadow:0 6px 20px rgba(44,26,14,.25)}
-.bb.nx{background:#8b5a2b;color:#fff}.bb.nx:hover{background:#7a4e24}
-.bb.snap{background:#5a7a9a;color:#fff}.bb.snap:hover{background:#4a6a8a}
-.bb.done-btn{background:#5a8a5a;color:#fff}.bb.done-btn:hover{background:#4a7a4a}
-.bb.st{background:#e8ddd0;color:#8b6a4a;padding:11px}.bb.st:hover{background:#ddd0c0}
-.brew-drawdown{text-align:center;font-family:'DM Mono',monospace;font-size:11px;color:#8b6a4a;margin-bottom:10px;letter-spacing:.08em}
-
-/* Summary table */
-.summary-table{width:100%;border-collapse:collapse}
-.summary-table th{font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.08em;padding:4px 6px;text-align:center;border-bottom:1px solid #e8ddd0}
-.summary-table th:first-child{text-align:left}
-.summary-table td{font-family:'DM Mono',monospace;font-size:11px;color:#2c1a0e;padding:6px 6px;text-align:center;border-bottom:1px solid #f5efe6}
-.summary-table td:first-child{font-family:'Lora',serif;font-size:12px;text-align:left}
-.diff-over{color:#e07a5f}.diff-under{color:#6aab6a}
-
-.brew-plan-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
-.si{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:12px;border:1.5px solid #e0d4c4;background:#faf7f3}
-.snn{font-family:'DM Mono',monospace;font-size:10px;color:#8b6a4a;min-width:18px}
-.si-info{flex:1}.si-name{font-family:'Lora',serif;font-size:14px;color:#2c1a0e}.si-meta{font-family:'DM Mono',monospace;font-size:10px;color:#8b6a4a}
 .ar{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
 .ab2{flex:1;min-width:80px;padding:12px;border-radius:12px;border:1.5px solid #e0d4c4;background:#faf7f3;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#2c1a0e;cursor:pointer;transition:all .18s;text-align:center}
 .ab2:hover{border-color:#8b5a2b;background:#fff}
@@ -176,21 +215,30 @@ h1 em{font-style:italic;color:#8b5a2b}
 .notion-item.selected{background:#e8f0fd}
 .notion-item-name{font-family:'Lora',serif;font-size:14px;color:#2c1a0e}
 .notion-item-meta{font-family:'DM Mono',monospace;font-size:10px;color:#8b6a4a;margin-top:2px}
+
+/* ── Brew / Timemore tab ── */
+.wid-input-row{display:flex;gap:10px;align-items:flex-end;margin-bottom:0}
+.wid-input-row .f{flex:1;margin-bottom:0}
+.fetch-btn{padding:10px 18px;border-radius:10px;border:none;background:#2c1a0e;color:#f5efe6;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:all .18s;white-space:nowrap;align-self:flex-end}
+.fetch-btn:hover{background:#3d2510}.fetch-btn:disabled{background:#c4a882;cursor:not-allowed}
+.pour-table{width:100%;border-collapse:collapse}
+.pour-table th{font-family:'DM Mono',monospace;font-size:9px;color:#8b6a4a;text-transform:uppercase;letter-spacing:.08em;padding:5px 8px;text-align:center;border-bottom:1.5px solid #e8ddd0}
+.pour-table th:first-child{text-align:left}
+.pour-table td{font-family:'DM Mono',monospace;font-size:11px;color:#2c1a0e;padding:7px 8px;text-align:center;border-bottom:1px solid #f5efe6}
+.pour-table td:first-child{font-family:'Lora',serif;font-size:12px;text-align:left;font-weight:600}
+.pour-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase}
+.status-banner{border-radius:12px;padding:11px 14px;margin-bottom:12px;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.06em}
+.status-banner.loading{background:#fdf5e8;border:1.5px solid #e8c87a;color:#7a5a0a}
+.status-banner.success{background:#edf8ed;border:1.5px solid #7ac87a;color:#1a5a1a}
+.status-banner.error{background:#fdf0ee;border:1.5px solid #e8a0a0;color:#7a1a1a}
+.brew-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+@media(max-width:480px){.brew-summary-grid{grid-template-columns:1fr 1fr}.g4{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr}}
 `;
 
-export default function PourOverTracker() {
+export default function BrewTracker() {
   const [recipe, setRecipe] = useState(defaultRecipe);
   const [savedRecipes, setSavedRecipes] = useState([]);
-  const [tab, setTab] = useState("recipe");
-  const [brewing, setBrewing] = useState(false);
-  const [timers, setTimers] = useState([]);
-  const [activeStep, setActiveStep] = useState(-1);
-  const [totalTimer, setTotalTimer] = useState(0);
-  const [actualPours, setActualPours] = useState([]);
-  const [lastActualPours, setLastActualPours] = useState([]);
-  const [brewDone, setBrewDone] = useState(false);
-  const [snapMarks, setSnapMarks] = useState([]); // [{time, type: 'snap'|'start'}]
-  const [brewEndTime, setBrewEndTime] = useState(null);
+  const [tab, setTab] = useState("brew");
   const [notionBeans, setNotionBeans] = useState([]);
   const [notionEquipment, setNotionEquipment] = useState([]);
   const [fetchingBeans, setFetchingBeans] = useState(false);
@@ -198,192 +246,127 @@ export default function PourOverTracker() {
   const [selectedBeanId, setSelectedBeanId] = useState(null);
   const [selectedEquipId, setSelectedEquipId] = useState(null);
   const [showSaved, setShowSaved] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
   const [notif, setNotif] = useState({ msg: "", type: "" });
   const [syncing, setSyncing] = useState(false);
-  const iv = useRef(null);
+
+  // Timemore fetch state
+  const [workIdInput, setWorkIdInput] = useState("");
+  const [fetchingTimemore, setFetchingTimemore] = useState(false);
+  const [timemoreStatus, setTimemoreStatus] = useState(null); // {type:'loading'|'success'|'error', msg}
 
   useEffect(() => {
-    try { const r = localStorage.getItem("pour-over-recipes"); if (r) setSavedRecipes(JSON.parse(r)); } catch {}
+    try { const r = localStorage.getItem("brew-tracker-recipes"); if (r) setSavedRecipes(JSON.parse(r)); } catch {}
   }, []);
 
   const notify = (msg, type = "") => { setNotif({ msg, type }); setTimeout(() => setNotif({ msg:"", type:"" }), 3200); };
 
+  // ── Timemore fetch ─────────────────────────────────────────────────────────
+  const fetchTimemore = async () => {
+    const wid = workIdInput.trim();
+    if (!wid || !/^\d+$/.test(wid)) { notify("Enter a numeric Work ID", "err"); return; }
+    setFetchingTimemore(true);
+    setTimemoreStatus({ type: "loading", msg: `Fetching work ${wid}…` });
+    try {
+      const res = await fetch(`/timemore/${wid}`);
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setTimemoreStatus({ type: "error", msg: data.error || "Fetch failed" });
+        notify("Timemore fetch failed", "err");
+        return;
+      }
+      setRecipe(r => ({
+        ...r,
+        workId: wid,
+        pours: data.pours,
+        totalWater: data.totalWater,
+        totalTime: data.totalTime,
+        rawPoints: data.rawPoints,
+        // Auto-set name if still default
+        name: r.name === "My Brew" ? `Brew #${wid}` : r.name,
+      }));
+      setTimemoreStatus({
+        type: "success",
+        msg: `Loaded — ${data.pours.length} pours · ${data.totalWater}g · ${formatTime(data.totalTime)}`,
+      });
+      notify(`Work ${wid} loaded`, "ok");
+    } catch (err) {
+      setTimemoreStatus({ type: "error", msg: "Cannot reach server" });
+      notify("Cannot reach server", "err");
+    }
+    setFetchingTimemore(false);
+  };
+
+  // ── Notion ─────────────────────────────────────────────────────────────────
   const fetchNotionBeans = async () => {
     setFetchingBeans(true);
     try { const res = await fetch("/notion-beans"); const data = await res.json(); if (data.items) setNotionBeans(data.items); else notify("Could not load beans","err"); }
-    catch { notify("Cannot reach server.js on :3001","err"); }
+    catch { notify("Cannot reach server","err"); }
     setFetchingBeans(false);
   };
 
   const fetchNotionEquipment = async () => {
     setFetchingEquip(true);
     try { const res = await fetch("/notion-equipment"); const data = await res.json(); if (data.items) setNotionEquipment(data.items); else notify("Could not load equipment","err"); }
-    catch { notify("Cannot reach server.js on :3001","err"); }
+    catch { notify("Cannot reach server","err"); }
     setFetchingEquip(false);
   };
 
   const applyNotionBean = (item) => {
     setSelectedBeanId(item.id);
     setRecipe(r => ({ ...r, roast: item.roastLevel||r.roast, bean: { ...r.bean, origin:item.origin||"", variety:item.variety||"", altitude:item.altitude||"", process:item.process||"", roastDate:item.roastDate||"", roaster:item.roaster||"", descriptors:item.notes||"", _notionId:item.id } }));
-    notify(`Loaded: ${item.name} — still editable`);
+    notify(`Loaded: ${item.name}`);
   };
 
   const applyNotionEquip = (item) => {
     setSelectedEquipId(item.id);
     const isBrewer = /brewer/i.test(item.type), isGrinder = /grinder/i.test(item.type);
     setRecipe(r => ({ ...r, equipment: { ...r.equipment, ...(isBrewer?{brewTool:item.name,_brewerNotionId:item.id}:{}), ...(isGrinder?{grinder:item.name,_grinderNotionId:item.id}:{}) } }));
-    notify(`Loaded: ${item.name} — still editable`);
+    notify(`Loaded: ${item.name}`);
   };
 
-  const startBrew = () => {
-    setBrewing(true); setActiveStep(0); setTotalTimer(0); setBrewDone(false);
-    setSnapMarks([]);
-    setActualPours(recipe.pours.map((p,i) => ({ water: p.targetWater, pourStartTime: i===0?0:null, pourStopTime: null })));
-    setTimers(recipe.pours.map((_,i) => ({ elapsed:0, running:i===0, done:false })));
-  };
-
-  const stopBrew = () => { setBrewing(false); setActiveStep(-1); setTotalTimer(0); setTimers([]); setBrewDone(false); setSnapMarks([]); clearInterval(iv.current); };
-
-  const handleSnap = () => {
-    const i = activeStep;
-    setActualPours(prev => { const u=[...prev]; u[i]={...u[i],pourStopTime:totalTimer}; return u; });
-    setSnapMarks(prev => [...prev, {time: totalTimer, type: 'snap'}]);
-  };
-
-  const handleContinue = () => {
-    const next = activeStep + 1;
-    const snapped = actualPours.map((a,i) => i===activeStep && a.pourStopTime==null ? {...a,pourStopTime:totalTimer} : a);
-    if (next < recipe.pours.length) {
-      snapped[next] = {...snapped[next], pourStartTime: totalTimer};
-      setSnapMarks(prev => [...prev, {time: totalTimer, type: 'start'}]);
-    }
-    setActualPours(snapped);
-    if (next >= recipe.pours.length) {
-      setLastActualPours(snapped);
-      setBrewEndTime(totalTimer);
-      stopBrew();
-      notify("☕ Brew complete!");
-      return;
-    }
-    setActiveStep(next);
-    setTimers(prev => prev.map((t,i) => i===activeStep?{...t,running:false,done:true}:i===next?{...t,running:true}:t));
-  };
-
-  const snapStop = (i) => setActualPours(prev => { const u=[...prev]; u[i]={...u[i],pourStopTime:totalTimer}; return u; });
-  const updateActual = (i, field, val) => setActualPours(prev => { const u=[...prev]; u[i]={...u[i],[field]:val===""?null:Number(val)}; return u; });
-
-  useEffect(() => {
-    if (!brewing) { clearInterval(iv.current); return; }
-    iv.current = setInterval(() => { setTotalTimer(t=>t+1); }, 1000);
-    return () => clearInterval(iv.current);
-  }, [brewing]);
-
+  // ── State helpers ──────────────────────────────────────────────────────────
   const up = (f,v) => setRecipe(r=>({...r,[f]:v}));
   const upEquip = (f,v) => setRecipe(r=>({...r,equipment:{...r.equipment,[f]:v}}));
   const upBean = (f,v) => setRecipe(r=>({...r,bean:{...r.bean,[f]:v}}));
   const upSensory = (f,v) => setRecipe(r=>({...r,sensory:{...r.sensory,[f]:v}}));
+  const toggleTaste = (t) => setRecipe(r=>({...r,tastingNotes:r.tastingNotes.includes(t)?r.tastingNotes.filter(n=>n!==t):[...r.tastingNotes,t]}));
 
   const clearNotes = () => setRecipe(r=>({...r, notes:"", tastingNotes:[], sensory:Object.fromEntries(Object.keys(r.sensory).map(k=>[k,0]))}));
   const clearBean = () => setRecipe(r=>({...r, roast:"Light", bean:{origin:"",variety:"",altitude:"",process:"",roastDate:"",roaster:"",lot:"",descriptors:"",impression:""}}));
   const clearEquipment = () => setRecipe(r=>({...r, equipment:{brewTool:"",grinder:"",waterSource:"",tds:"",hardness:"",waterNotes:""}}));
-  const clearRecipe = () => { setRecipe({...defaultRecipe, id:undefined}); setLastActualPours([]); notify("Cleared!"); };
-
-  const applyTemplate = (tpl) => {
-    const x = Number(recipe.coffee) || 15;
-    const lastPour = recipe.pours[recipe.pours.length-1];
-    const r = (x > 0 && lastPour?.targetWater) ? lastPour.targetWater / x : 15;
-    const total = Math.round(x * r);
-    let pours, name, coffee = x, targetTime = 210;
-    if (tpl === "two") {
-      name = "Two-Pour"; targetTime = 180;
-      pours = [
-        { label:"Bloom",    targetWater: Math.round(x*2), startTime: 0,  stirMethod:"None",          flowStyle:"Center" },
-        { label:"1st Pour", targetWater: total,            startTime: 30, stirMethod:"Slow Circular", flowStyle:"Slow Circular" },
-      ];
-    } else if (tpl === "three") {
-      name = "Three-Pour"; targetTime = 210;
-      pours = [
-        { label:"Bloom",    targetWater: Math.round(x*2),    startTime: 0,  stirMethod:"None",           flowStyle:"Center" },
-        { label:"1st Pour", targetWater: Math.round(total/2), startTime: 30, stirMethod:"Quick Circular", flowStyle:"Quick Circular" },
-        { label:"2nd Pour", targetWater: total,               startTime: 60, stirMethod:"None",           flowStyle:"Circular then Centre" },
-      ];
-    } else if (tpl === "thermal") {
-      name = "Thermal Shock"; coffee = 15; targetTime = 240;
-      pours = [
-        { label:"Bloom",    targetWater: 60,  startTime: 0,   stirMethod:"None", flowStyle:"Fast" },
-        { label:"1st Pour", targetWater: 140, startTime: 40,  stirMethod:"None", flowStyle:"Fast" },
-        { label:"2nd Pour", targetWater: 190, startTime: 75,  stirMethod:"None", flowStyle:"Slow Circular" },
-        { label:"3rd Pour", targetWater: 230, startTime: 105, stirMethod:"None", flowStyle:"Slow Centre" },
-      ];
-    }
-    setRecipe(r => ({...r, name, coffee, pours, targetTime}));
-    setShowTemplates(false);
-    notify(`"${name}" applied!`);
-  };
-  const upPour = (i,f,v) => { const p=[...recipe.pours]; p[i]={...p[i],[f]:(f==="targetWater"||f==="startTime")?Number(v):v}; setRecipe(r=>({...r,pours:p})); };
-  const addPour = () => { const l=recipe.pours[recipe.pours.length-1]; setRecipe(r=>({...r,pours:[...r.pours,{label:`Pour ${r.pours.length+1}`,targetWater:l?l.targetWater+60:60,startTime:l?l.startTime+45:0,stirMethod:"None",flowStyle:"Center"}]})); };
-  const remPour = (i) => setRecipe(r=>({...r,pours:r.pours.filter((_,idx)=>idx!==i)}));
-  const toggleTaste = (t) => setRecipe(r=>({...r,tastingNotes:r.tastingNotes.includes(t)?r.tastingNotes.filter(n=>n!==t):[...r.tastingNotes,t]}));
-
-  const totalWater = recipe.pours.length ? recipe.pours[recipe.pours.length-1].targetWater : 0;
-  const ratio = recipe.coffee > 0 ? (totalWater/recipe.coffee).toFixed(1) : "—";
-
-  // waterPoured = actual ml added during this pour (cumulative scale reading minus previous)
-  const getWaterPoured = (i, pours) => {
-    const cur = pours[i];
-    if (cur?.water == null) return null;
-    const prev = pours[i - 1];
-    return prev?.water != null ? cur.water - prev.water : cur.water;
-  };
-
-  const getPourSpeed = (i, pours) => {
-    const ap = pours[i];
-    if (ap?.pourStartTime == null || ap?.pourStopTime == null) return null;
-    const d = ap.pourStopTime - ap.pourStartTime;
-    const w = getWaterPoured(i, pours);
-    return (d > 0 && w != null && w > 0) ? (w / d).toFixed(1) : null;
-  };
-
-  const getPause = (i, pours) => {
-    const c = pours[i], n = pours[i + 1];
-    if (!c || c.pourStopTime == null || !n || n.pourStartTime == null) return null;
-    return n.pourStartTime - c.pourStopTime;
-  };
+  const clearBrewData = () => { setRecipe(r=>({...r, workId:"", pours:[], totalWater:0, totalTime:0, rawPoints:[]})); setWorkIdInput(""); setTimemoreStatus(null); };
 
   const saveRecipe = () => {
     const rec={...recipe,id:recipe.id||Date.now()};
-    const upd=[rec,...savedRecipes.filter(r=>r.id!==rec.id)].slice(0,20);
+    const upd=[rec,...savedRecipes.filter(r=>r.id!==rec.id)].slice(0,30);
     setSavedRecipes(upd); setRecipe(rec);
-    try{localStorage.setItem("pour-over-recipes",JSON.stringify(upd));}catch{}
-    notify("Recipe saved!");
+    try{localStorage.setItem("brew-tracker-recipes",JSON.stringify(upd));}catch{}
+    notify("Saved!");
   };
 
   const exportJSON = () => {
     const blob = new Blob([JSON.stringify(savedRecipes,null,2)],{type:"application/json"});
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");// eslint-disable-line no-unused-vars
-    a.href = url;
-    a.download = `pour-over-${new Date().toISOString().split("T")[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    notify("Exported!");
+    const a = document.createElement("a");
+    a.href = url; a.download = `brew-log-${new Date().toISOString().split("T")[0]}.json`; a.click();
+    URL.revokeObjectURL(url); notify("Exported!");
   };
 
-  const loadRecipe = (r) => { setRecipe(r); setShowSaved(false); setTab("recipe"); notify(`Loaded "${r.name}"`); };
-  const deleteRecipe = (id) => { const u=savedRecipes.filter(r=>r.id!==id); setSavedRecipes(u); try{localStorage.setItem("pour-over-recipes",JSON.stringify(u));}catch{}; };
+  const loadRecipe = (r) => { setRecipe(r); setShowSaved(false); setTab("brew"); notify(`Loaded "${r.name}"`); };
+  const deleteRecipe = (id) => { const u=savedRecipes.filter(r=>r.id!==id); setSavedRecipes(u); try{localStorage.setItem("brew-tracker-recipes",JSON.stringify(u));}catch{}; };
 
   const syncToNotion = async () => {
     setSyncing(true);
     try {
-      const res = await fetch("/sync",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...recipe,actualPours:actualPours.length>0?actualPours:lastActualPours.length>0?lastActualPours:null,brewEndTime})});
+      const res = await fetch("/sync",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(recipe)});
       const data = await res.json();
       if (data.success) notify(`✓ Synced — ${data.sessionId}`,"ok"); else notify(`Notion: ${data.error}`,"err");
-    } catch { notify("Cannot reach server.js on :3001","err"); }
+    } catch { notify("Cannot reach server","err"); }
     setSyncing(false);
   };
 
-  const activePour = recipe.pours[activeStep];
+  const ratio = recipe.coffee > 0 && recipe.totalWater > 0 ? (recipe.totalWater / recipe.coffee).toFixed(1) : "—";
+  const POUR_COLORS = ["#c4843a","#8b5a2b","#5a3a1a","#a07040","#7a5030"];
 
   return (
     <>
@@ -392,102 +375,165 @@ export default function PourOverTracker() {
         <div className="grain"/><div className="ring r1"/><div className="ring r2"/>
         <div className="wrap">
           <div className="hdr">
-            <div className="eyebrow">Manual Brew Journal</div>
-            <h1>Pour <em>Over</em><br/>Recipe Tracker</h1>
+            <div className="eyebrow">Brew Journal</div>
+            <h1>Coffee <em>Tracker</em></h1>
           </div>
-          <input className="ni" value={recipe.name} onChange={e=>up("name",e.target.value)} placeholder="Recipe name…"/>
+          <input className="ni" value={recipe.name} onChange={e=>up("name",e.target.value)} placeholder="Session name…"/>
           <div style={{height:18}}/>
+
           <div className="tabs">
-            {[["recipe","⚗️ Recipe"],["equipment","🔧 Equip"],["bean","🌱 Bean"],["brew","☕ Brew"],["notes","📓 Notes"]].map(([k,l])=>(
-              <button key={k} className={`tab ${tab===k?"on":""}`} onClick={()=>{setTab(k);if(k!=="brew")stopBrew();}}>{l}</button>
+            {[["brew","☕ Brew"],["params","⚗️ Params"],["equipment","🔧 Equip"],["bean","🌱 Bean"],["notes","📓 Notes"]].map(([k,l])=>(
+              <button key={k} className={`tab ${tab===k?"on":""}`} onClick={()=>setTab(k)}>{l}</button>
             ))}
           </div>
 
-          {/* ── RECIPE ── */}
-          {tab==="recipe"&&<>
-            <div className="stats">
-              {[[`${recipe.coffee}g`,"Coffee"],[`${totalWater}ml`,"Total"],[`1:${ratio}`,"Ratio"],[`${recipe.waterTemp}°C`,"Temp"],[`${recipe.grindSize}`,"Grind"]].map(([v,l])=>(
-                <div className="stat" key={l}><div className="sv">{v}</div><div className="sl">{l}</div></div>
-              ))}
-            </div>
+          {/* ── BREW TAB ── */}
+          {tab==="brew"&&<>
+            {/* Work ID fetch */}
             <div className="card">
-              <div className="ct"><span>Parameters</span></div>
-              <div className="g4" style={{marginBottom:13}}>
-                <div className="f"><label>Coffee (g)</label><input type="number" value={recipe.coffee} onChange={e=>up("coffee",Number(e.target.value))}/></div>
-                <div className="f"><label>Temp (°C)</label><input type="number" value={recipe.waterTemp} onChange={e=>up("waterTemp",Number(e.target.value))}/></div>
-                <div className="f"><label>Grind Size</label><input type="number" step="0.1" min="1" max="50" value={recipe.grindSize} onChange={e=>up("grindSize",parseFloat(parseFloat(e.target.value).toFixed(1)))}/></div>
-                <div className="f"><label>Roast</label><select value={recipe.roast} onChange={e=>up("roast",e.target.value)}>{ROASTS.map(r=><option key={r}>{r}</option>)}</select></div>
-              </div>
-            </div>
-            <div className="card">
-              <div className="ct"><span>Pour Stages</span></div>
-              <div className="ph">
-                <div className="plbl" style={{textAlign:"left"}}>Stage</div>
-                <div className="plbl">ml</div>
-                <div className="plbl">Start (s)</div>
-                <div/>
-              </div>
-              {recipe.pours.map((p,i)=>(
-                <div className="pr" key={i}>
-                  <div className="pr-top">
-                    <input value={p.label} onChange={e=>upPour(i,"label",e.target.value)} style={{textAlign:"left"}}/>
-                    <input type="number" value={p.targetWater} onChange={e=>upPour(i,"targetWater",e.target.value)}/>
-                    <input type="number" value={p.startTime} onChange={e=>upPour(i,"startTime",e.target.value)}/>
-                    <button className="db" onClick={()=>remPour(i)}>×</button>
-                  </div>
-                  <div className="pr-bot">
-                    <span className="pr-lbl">Flow</span>
-                    <select value={p.flowStyle||"Center"} onChange={e=>upPour(i,"flowStyle",e.target.value)}>{FLOW_STYLES.map(s=><option key={s}>{s}</option>)}</select>
-                    <span className="pr-lbl" style={{marginLeft:4}}>Stir</span>
-                    <select value={p.stirMethod||"None"} onChange={e=>upPour(i,"stirMethod",e.target.value)}>{STIR_METHODS.map(s=><option key={s}>{s}</option>)}</select>
-                  </div>
+              <div className="ct"><span>Timemore Work ID</span></div>
+              <div className="wid-input-row">
+                <div className="f">
+                  <label>Work ID</label>
+                  <input type="text" inputMode="numeric" value={workIdInput}
+                    onChange={e=>setWorkIdInput(e.target.value)}
+                    onKeyDown={e=>e.key==="Enter"&&fetchTimemore()}
+                    placeholder="e.g. 218583"/>
                 </div>
-              ))}
-              <button className="ab" onClick={addPour}>+ Add Pour</button>
-              <div style={{marginTop:12,display:"flex",alignItems:"center",gap:10}}>
-                <div className="f" style={{flex:1,marginBottom:0}}><label>Target Total Time (s)</label><input type="number" value={recipe.targetTime||210} onChange={e=>up("targetTime",Number(e.target.value))}/></div>
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#8b6a4a",paddingTop:20}}>{`= ${Math.floor((recipe.targetTime||210)/60)}:${String((recipe.targetTime||210)%60).padStart(2,"0")}`}</div>
+                <button className="fetch-btn" onClick={fetchTimemore} disabled={fetchingTimemore}>
+                  {fetchingTimemore?"Loading…":"Fetch →"}
+                </button>
               </div>
+              <p style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#c4a882",marginTop:8,letterSpacing:".06em"}}>
+                Find the Work ID in your Timemore app share link: bm.timemore.com/v4/share/<strong>XXXXXX</strong>
+              </p>
             </div>
-            <div className="ar">
-              <button className="ab2" onClick={()=>setShowSaved(s=>!s)}>📂 Saved</button>
-              <button className="ab2" onClick={()=>setShowTemplates(s=>!s)}>📋 Templates</button>
-              <button className="ab2" onClick={()=>{setRecipe({...defaultRecipe,id:undefined});notify("New recipe!");}}>+ New</button>
-              <button className="ab2 export" onClick={exportJSON}>⬇ Export</button>
-              <button className="ab2 clr" onClick={clearRecipe}>✕ Clear</button>
-              <button className="ab2 pri" onClick={saveRecipe}>Save</button>
+
+            {timemoreStatus&&(
+              <div className={`status-banner ${timemoreStatus.type}`}>{timemoreStatus.msg}</div>
+            )}
+
+            {/* Pour chart */}
+            {recipe.rawPoints?.length > 0 && (
+              <div className="card">
+                <div className="ct">
+                  <span>Weight Trace</span>
+                  <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8b6a4a"}}>Work #{recipe.workId}</span>
+                </div>
+                <WeightChart rawPoints={recipe.rawPoints} pours={recipe.pours}/>
+              </div>
+            )}
+
+            {/* Brew summary stats */}
+            {recipe.pours?.length > 0 && <>
+              <div className="brew-summary-grid">
+                {[
+                  [recipe.pours.length, "Pours"],
+                  [`${recipe.totalWater}g`, "Total Water"],
+                  [`1:${ratio}`, "Ratio"],
+                  [formatTime(recipe.totalTime), "Brew Time"],
+                ].map(([v,l])=>(
+                  <div className="stat" key={l}><div className="sv">{v}</div><div className="sl">{l}</div></div>
+                ))}
+              </div>
+
+              {/* Pour summary table */}
+              <div className="card">
+                <div className="ct"><span>Pour Breakdown</span></div>
+                <div style={{overflowX:"auto"}}>
+                  <table className="pour-table">
+                    <thead>
+                      <tr>
+                        <th>Stage</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Duration</th>
+                        <th>Volume</th>
+                        <th>Cumul.</th>
+                        <th>Avg Speed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recipe.pours.map((p, i) => (
+                        <tr key={i}>
+                          <td>
+                            <span className="pour-badge" style={{background:POUR_COLORS[i%POUR_COLORS.length]+"22",color:POUR_COLORS[i%POUR_COLORS.length]}}>
+                              {p.label}
+                            </span>
+                          </td>
+                          <td>{formatTime(p.startSec)}</td>
+                          <td>{formatTime(p.endSec)}</td>
+                          <td>{p.durationSec}s</td>
+                          <td>{p.volume}g</td>
+                          <td>{p.cumulativeWater}g</td>
+                          <td>{p.avgSpeedGps} g/s</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="ar">
+                <button className="ab2 clr" onClick={clearBrewData}>✕ Clear Brew</button>
+                <button className="ab2 pri" onClick={saveRecipe}>Save Session</button>
+                <button className="ab2 notion" onClick={syncToNotion} disabled={syncing}>{syncing?"Syncing…":"⬆ Sync to Notion"}</button>
+              </div>
+            </>}
+
+            {recipe.pours?.length === 0 && !timemoreStatus && (
+              <div className="empty">Enter a Work ID and tap Fetch to load your brew data</div>
+            )}
+
+            {/* Saved sessions */}
+            <div style={{marginTop:14}}>
+              <button className="ab2" onClick={()=>setShowSaved(s=>!s)} style={{width:"100%"}}>
+                📂 {showSaved?"Hide":"Browse"} Saved Sessions ({savedRecipes.length})
+              </button>
             </div>
-            {showSaved&&<div className="card" style={{marginTop:14}}>
-              <div className="ct"><span>Saved Recipes</span></div>
-              {savedRecipes.length===0?<div className="empty">No saved recipes yet</div>:(
+            {showSaved&&<div className="card" style={{marginTop:10}}>
+              <div className="ct"><span>Saved Sessions</span><button className="ct-btn" onClick={exportJSON}>⬇ Export</button></div>
+              {savedRecipes.length===0?<div className="empty">No saved sessions yet</div>:(
                 <div className="saved-l">
                   {savedRecipes.map(r=>(
                     <div className="saved-i" key={r.id} onClick={()=>loadRecipe(r)}>
-                      <div style={{flex:1}}><div className="saved-n">{r.name}</div><div className="saved-m">{r.coffee}g · Grind {r.grindSize} · {r.roast}</div></div>
+                      <div style={{flex:1}}>
+                        <div className="saved-n">{r.name}</div>
+                        <div className="saved-m">
+                          {[r.coffee&&`${r.coffee}g`, r.totalWater&&`→${r.totalWater}g`, r.pours?.length&&`${r.pours.length} pours`, r.workId&&`#${r.workId}`].filter(Boolean).join(" · ")}
+                        </div>
+                      </div>
                       <button className="saved-d" onClick={e=>{e.stopPropagation();deleteRecipe(r.id);}}>🗑</button>
                     </div>
                   ))}
                 </div>
               )}
             </div>}
-
-            {showTemplates&&<div className="card" style={{marginTop:14}}>
-              <div className="ct"><span>Templates</span><span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#c4a882"}}>scales with your dose &amp; ratio</span></div>
-              {[
-                {key:"two",    icon:"☕",   title:"Two-Pour",      desc:`Bloom → 1st pour @30s (Slow Circular) · target 3:00`},
-                {key:"three",  icon:"☕☕", title:"Three-Pour",    desc:`Bloom → 1st @30s (Quick Circ) → 2nd @60s (Circ→Centre)`},
-                {key:"thermal",icon:"🧊",  title:"Thermal Shock", desc:"Fixed 15g · Fast bloom → Fast → Slow Circ → Slow Centre"},
-              ].map(t=>(
-                <div key={t.key} className="saved-i" onClick={()=>applyTemplate(t.key)}>
-                  <div style={{fontSize:20,marginRight:10}}>{t.icon}</div>
-                  <div style={{flex:1}}><div className="saved-n">{t.title}</div><div className="saved-m">{t.desc}</div></div>
-                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#8b5a2b"}}>Apply →</div>
-                </div>
-              ))}
-            </div>}
           </>}
 
-          {/* ── EQUIPMENT ── */}
+          {/* ── PARAMS TAB ── */}
+          {tab==="params"&&<>
+            <div className="stats">
+              {[[`${recipe.coffee}g`,"Coffee"],[`${recipe.totalWater||"?"}g`,"Water"],[`1:${ratio}`,"Ratio"],[`${recipe.waterTemp}°C`,"Temp"],[`${recipe.grindSize}`,"Grind"]].map(([v,l])=>(
+                <div className="stat" key={l}><div className="sv">{v}</div><div className="sl">{l}</div></div>
+              ))}
+            </div>
+            <div className="card">
+              <div className="ct"><span>Brew Parameters</span></div>
+              <div className="g4" style={{marginBottom:0}}>
+                <div className="f"><label>Coffee (g)</label><input type="number" value={recipe.coffee} onChange={e=>up("coffee",Number(e.target.value))}/></div>
+                <div className="f"><label>Temp (°C)</label><input type="number" value={recipe.waterTemp} onChange={e=>up("waterTemp",Number(e.target.value))}/></div>
+                <div className="f"><label>Grind Size</label><input type="number" step="0.1" min="1" max="50" value={recipe.grindSize} onChange={e=>up("grindSize",parseFloat(parseFloat(e.target.value).toFixed(1)))}/></div>
+                <div className="f"><label>Roast</label><select value={recipe.roast} onChange={e=>up("roast",e.target.value)}>{ROASTS.map(r=><option key={r}>{r}</option>)}</select></div>
+              </div>
+            </div>
+            <div className="ar">
+              <button className="ab2 clr" onClick={()=>{setRecipe({...defaultRecipe,id:undefined});notify("Cleared!");}}>✕ Clear</button>
+              <button className="ab2 pri" onClick={saveRecipe}>Save</button>
+            </div>
+          </>}
+
+          {/* ── EQUIPMENT TAB ── */}
           {tab==="equipment"&&<>
             <div className="card">
               <div className="ct"><span>From Notion</span><button className="ct-btn" onClick={fetchNotionEquipment} disabled={fetchingEquip}>{fetchingEquip?"Loading…":"⬇ Load Equipment"}</button></div>
@@ -505,8 +551,8 @@ export default function PourOverTracker() {
             <div className="card">
               <div className="ct"><span>Brew Setup</span></div>
               <div className="g2" style={{marginBottom:14}}>
-                <div className="f"><label>Brew Tool</label><input type="text" value={recipe.equipment?.brewTool||""} onChange={e=>upEquip("brewTool",e.target.value)} placeholder="e.g. V60, Chemex…"/></div>
-                <div className="f"><label>Grinder</label><input type="text" value={recipe.equipment?.grinder||""} onChange={e=>upEquip("grinder",e.target.value)} placeholder="e.g. Comandante…"/></div>
+                <div className="f"><label>Brew Tool</label><input type="text" value={recipe.equipment?.brewTool||""} onChange={e=>upEquip("brewTool",e.target.value)} placeholder="V60, Chemex…"/></div>
+                <div className="f"><label>Grinder</label><input type="text" value={recipe.equipment?.grinder||""} onChange={e=>upEquip("grinder",e.target.value)} placeholder="Comandante…"/></div>
               </div>
               <div className="f"><label>Water Source</label>
                 <select value={recipe.equipment?.waterSource||""} onChange={e=>upEquip("waterSource",e.target.value)}>
@@ -525,12 +571,12 @@ export default function PourOverTracker() {
             <div className="ar"><button className="ab2 clr" onClick={clearEquipment}>✕ Clear</button><button className="ab2 pri" onClick={saveRecipe}>Save Equipment</button></div>
           </>}
 
-          {/* ── BEAN ── */}
+          {/* ── BEAN TAB ── */}
           {tab==="bean"&&<>
             <div className="card">
-              <div className="ct"><span>From Notion</span><button className="ct-btn" onClick={fetchNotionBeans} disabled={fetchingBeans}>{fetchingBeans?"Loading…":"⬇ Load Beans"}</button></div>
+              <div className="ct"><span>Current Beans</span><button className="ct-btn" onClick={fetchNotionBeans} disabled={fetchingBeans}>{fetchingBeans?"Loading…":"⬇ Load Beans"}</button></div>
               {notionBeans.length>0&&<div className="notion-picker">
-                <div className="notion-picker-hdr">Select to pre-fill — still editable after</div>
+                <div className="notion-picker-hdr">Showing beans with Status = Using</div>
                 {notionBeans.map(item=>(
                   <div key={item.id} className={`notion-item ${selectedBeanId===item.id?"selected":""}`} onClick={()=>applyNotionBean(item)}>
                     <div className="notion-item-name">{item.name}</div>
@@ -538,7 +584,7 @@ export default function PourOverTracker() {
                   </div>
                 ))}
               </div>}
-              {notionBeans.length===0&&<p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#c4a882",marginBottom:4}}>Load from Notion to pre-fill, or type below.</p>}
+              {notionBeans.length===0&&<p style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#c4a882",marginBottom:4}}>Load to show beans marked "Using" in Notion, or type below.</p>}
             </div>
             <div className="card">
               <div className="ct"><span>Coffee Bean</span></div>
@@ -567,226 +613,7 @@ export default function PourOverTracker() {
             <div className="ar"><button className="ab2 clr" onClick={clearBean}>✕ Clear</button><button className="ab2 pri" onClick={saveRecipe}>Save Bean Info</button></div>
           </>}
 
-          {/* ── BREW ── */}
-          {tab==="brew"&&<>
-            {(!brewing && !brewDone)?<>
-              <div className="card">
-                <div className="ct"><span>Brew Plan — {recipe.name}</span></div>
-                <div className="brew-plan-list">
-                  {recipe.pours.map((p,i)=>(
-                    <div className="si" key={i}>
-                      <div className="snn">{i+1}</div>
-                      <div className="si-info">
-                        <div className="si-name">{p.label}</div>
-                        <div className="si-meta">→{p.targetWater}ml · @{formatTime(p.startTime)} · {p.flowStyle||p.stirMethod||"No stir"}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{textAlign:"center",fontFamily:"'DM Mono',monospace",fontSize:11,color:"#8b6a4a"}}>Total: {totalWater}ml</div>
-              </div>
-
-              {lastActualPours.length>0&&<div className="card">
-                <div className="ct"><span>Last Brew — Log</span></div>
-                <div style={{overflowX:"auto"}}>
-                <table className="summary-table">
-                  <thead><tr><th>Pour</th><th>Flow</th><th>Target</th><th>Actual</th><th>Δ</th><th>Start</th><th>Stop</th><th>Speed</th><th>Pause→</th></tr></thead>
-                  <tbody>
-                    {recipe.pours.map((p,i)=>{
-                      const prevTarget = i>0 ? recipe.pours[i-1].targetWater : 0;
-                      const pourTarget = p.targetWater - prevTarget;
-                      const pourActual = getWaterPoured(i, lastActualPours);
-                      const diff = pourActual != null ? pourActual - pourTarget : null;
-                      const speed = getPourSpeed(i, lastActualPours);
-                      const pause = getPause(i, lastActualPours);
-                      const ap = lastActualPours[i]||{};
-                      return(
-                        <tr key={i}>
-                          <td>{p.label}</td>
-                          <td style={{fontSize:9}}>{p.flowStyle||"—"}</td>
-                          <td>{pourTarget}ml</td>
-                          <td>{pourActual!=null?`${pourActual}ml`:"—"}</td>
-                          <td className={diff>0?"diff-over":diff<0?"diff-under":""}>{diff!=null?(diff>0?`+${diff}`:diff)+"ml":"—"}</td>
-                          <td>{ap.pourStartTime!=null?`${ap.pourStartTime}s`:"—"}</td>
-                          <td>{ap.pourStopTime!=null?`${ap.pourStopTime}s`:"—"}</td>
-                          <td>{speed?`${speed}ml/s`:"—"}</td>
-                          <td>{pause!=null?`${pause}s`:i<recipe.pours.length-1?"—":"↓"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                </div>
-              </div>}
-
-              <button className="bb go" onClick={startBrew}>Start Brewing ☕</button>
-
-            </>:<>
-              {/* ── SINGLE CLOCK BREW UI ── */}
-              {(()=>{
-                const POUR_COLORS = ["#c4843a","#8b5a2b","#5a3a1a","#a07040","#7a5030"];
-                const totalBrewTime = recipe.targetTime || Math.max(...recipe.pours.map(p=>p.startTime+60), 180);
-                const cx=130, cy=130, r=110, stroke=14;
-                const circ = 2*Math.PI*r;
-                const toAngle = (s) => (s/totalBrewTime)*360 - 90;
-                const polarToXY = (angle, radius) => {
-                  const rad = (angle * Math.PI)/180;
-                  return { x: cx + radius*Math.cos(rad), y: cy + radius*Math.sin(rad) };
-                };
-                const arcPath = (startS, endS, color) => {
-                  const a1 = toAngle(startS), a2 = toAngle(endS);
-                  const p1 = polarToXY(a1, r), p2 = polarToXY(a2, r);
-                  const large = (endS - startS)/totalBrewTime > 0.5 ? 1 : 0;
-                  return `M ${p1.x} ${p1.y} A ${r} ${r} 0 ${large} 1 ${p2.x} ${p2.y}`;
-                };
-                const markerLine = (timeS, color, width=3) => {
-                  const angle = toAngle(timeS);
-                  const inner = polarToXY(angle, r - stroke - 4);
-                  const outer = polarToXY(angle, r + stroke + 4);
-                  return <line key={timeS+color} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke={color} strokeWidth={width} strokeLinecap="round"/>;
-                };
-
-                const elapsed = totalTimer;
-                const progressAngle = Math.min(elapsed/totalBrewTime, 1)*360;
-                const activePour = brewDone ? null : recipe.pours[activeStep];
-                const ap = brewDone ? null : (actualPours[activeStep]||{});
-                const hasSnapped = ap && ap.pourStopTime != null;
-                const prevTarget = activeStep > 0 ? recipe.pours[activeStep-1].targetWater : 0;
-                const pourTarget = activePour ? activePour.targetWater - prevTarget : 0;
-                const pourActual = getWaterPoured(activeStep, actualPours);
-                const hasDiff = pourActual != null && pourActual !== pourTarget;
-
-                return <>
-                  <div className="brew-clock-wrap">
-                    <svg className="brew-clock-svg" viewBox="0 0 260 260">
-                      {/* Background ring */}
-                      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f0ebe3" strokeWidth={stroke}/>
-
-                      {/* Pour target zones */}
-                      {recipe.pours.map((p,i)=>(
-                        <path key={i} d={arcPath(p.startTime, recipe.pours[i+1]?.startTime ?? totalBrewTime, POUR_COLORS[i%POUR_COLORS.length])}
-                          fill="none" stroke={POUR_COLORS[i%POUR_COLORS.length]} strokeWidth={stroke} opacity={0.25} strokeLinecap="butt"/>
-                      ))}
-
-                      {/* Elapsed progress arc */}
-                      {elapsed>0&&(()=>{
-                        const endAngle = toAngle(Math.min(elapsed, totalBrewTime));
-                        const startPt = polarToXY(-90, r);
-                        const endPt = polarToXY(endAngle, r);
-                        const large = elapsed/totalBrewTime > 0.5 ? 1 : 0;
-                        const activeColor = brewDone ? "#6aab6a" : (POUR_COLORS[activeStep%POUR_COLORS.length]||"#8b5a2b");
-                        return <path d={`M ${startPt.x} ${startPt.y} A ${r} ${r} 0 ${large} 1 ${endPt.x} ${endPt.y}`}
-                          fill="none" stroke={activeColor} strokeWidth={stroke} strokeLinecap="round" opacity={0.85}/>;
-                      })()}
-
-                      {/* Pour start tick marks */}
-                      {recipe.pours.map((p,i)=>i>0&&(()=>{
-                        const angle = toAngle(p.startTime);
-                        const inner = polarToXY(angle, r-stroke/2-2);
-                        const outer = polarToXY(angle, r+stroke/2+2);
-                        return <line key={i} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y}
-                          stroke="#fff" strokeWidth={2.5} strokeLinecap="round"/>;
-                      })())}
-
-                      {/* Snap marks (grey) and continue marks (red) */}
-                      {snapMarks.map((m,i)=>markerLine(m.time, m.type==='snap'?'#9aadba':'#e07a5f', 4))}
-
-                      {/* 12 o'clock dot */}
-                      <circle cx={cx} cy={cy-r} r={4} fill="#c4a882"/>
-
-                      {/* Centre face */}
-                      <circle cx={cx} cy={cy} r={r-stroke-6} fill="#fffdf9"/>
-
-                      {/* Elapsed time */}
-                      <text x={cx} y={brewDone?cy-18:cy-8} className="brew-clock-centre-time">{formatTime(elapsed)}</text>
-
-                      {/* Pour name */}
-                      {!brewDone&&activePour&&<>
-                        <text x={cx} y={cy+18} className="brew-clock-centre-pour">{activePour.label}</text>
-                        <text x={cx} y={cy+34} className="brew-clock-centre-grams">+{pourTarget}ml → {activePour.targetWater}ml</text>
-                      </>}
-                      {brewDone&&<>
-                        <text x={cx} y={cy+14} className="brew-clock-centre-pour">Drawdown</text>
-                        <text x={cx} y={cy+30} className="brew-clock-centre-grams">tap done when empty</text>
-                      </>}
-                    </svg>
-
-                    {/* Legend */}
-                    <div className="brew-legend">
-                      {recipe.pours.map((p,i)=>(
-                        <div key={i} className="brew-legend-item">
-                          <div className="brew-legend-dot" style={{background:POUR_COLORS[i%POUR_COLORS.length]}}/>
-                          {p.label} {p.targetWater}ml
-                        </div>
-                      ))}
-                      <div className="brew-legend-item"><div className="brew-legend-dot" style={{background:"#9aadba"}}/> Stop</div>
-                      <div className="brew-legend-item"><div className="brew-legend-dot" style={{background:"#e07a5f"}}/> Next start</div>
-                    </div>
-                  </div>
-
-                  {/* Status + actual input */}
-                  {!brewDone&&activePour&&<div className="brew-status">
-                    <div className="brew-status-step">▶ {activePour.label}</div>
-                    <div className="brew-status-meta">target: +{pourTarget}ml · start @{formatTime(activePour.startTime)} · dur {formatTime(activePour.duration)}</div>
-                    <div className="brew-actual-inp">
-                      <div className="brew-actual-field">
-                        <div className="brew-actual-lbl">Scale (ml)</div>
-                        <input className={`mini-inp${hasDiff?" diff":""}`} type="number"
-                          value={ap.water??activePour.targetWater}
-                          onChange={e=>{ const u=[...actualPours]; u[activeStep]={...u[activeStep],water:e.target.value===""?null:Number(e.target.value)}; setActualPours(u); }}/>
-                      </div>
-                    </div>
-                  </div>}
-
-                  {brewDone&&<div className="card">
-                    <div className="ct"><span>Brew Log</span><span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#6aab6a"}}>✓ recorded</span></div>
-                    <div style={{overflowX:"auto"}}>
-                    <table className="summary-table">
-                      <thead><tr><th>Pour</th><th>Flow</th><th>Target</th><th>Actual</th><th>Δ</th><th>Start</th><th>Stop</th><th>Speed</th><th>Pause→</th></tr></thead>
-                      <tbody>
-                        {recipe.pours.map((p,i)=>{
-                          const prev = i>0?recipe.pours[i-1].targetWater:0;
-                          const pt = p.targetWater-prev;
-                          const pa = getWaterPoured(i, lastActualPours);
-                          const diff = pa!=null?pa-pt:null;
-                          const speed = getPourSpeed(i, lastActualPours);
-                          const pause = getPause(i, lastActualPours);
-                          const ap = lastActualPours[i]||{};
-                          return <tr key={i}>
-                            <td>{p.label}</td>
-                            <td style={{fontSize:9}}>{p.flowStyle||"—"}</td>
-                            <td>{pt}ml</td>
-                            <td>{pa!=null?`${pa}ml`:"—"}</td>
-                            <td className={diff>0?"diff-over":diff<0?"diff-under":""}>{diff!=null?(diff>0?`+${diff}`:diff)+"ml":"—"}</td>
-                            <td>{ap.pourStartTime!=null?`${ap.pourStartTime}s`:"—"}</td>
-                            <td>{ap.pourStopTime!=null?`${ap.pourStopTime}s`:"—"}</td>
-                            <td>{speed?`${speed}ml/s`:"—"}</td>
-                            <td>{pause!=null?`${pause}s`:i<recipe.pours.length-1?"—":"↓"}</td>
-                          </tr>;
-                        })}
-                      </tbody>
-                    </table>
-                    </div>
-                  </div>}
-
-                  {/* Action buttons */}
-                  <div className="brew-actions">
-                    {!brewDone&&<>
-                      {!hasSnapped
-                        ? <button className="bb snap" onClick={handleSnap}>⏱ Snap Stop</button>
-                        : <button className="bb nx" onClick={handleContinue}>
-                            {activeStep<recipe.pours.length-1?`Continue → ${recipe.pours[activeStep+1]?.label}`:"Finish Brew ✓"}
-                          </button>
-                      }
-                    </>}
-                    <button className="bb st" onClick={stopBrew}>{brewDone?"← Back":"Abandon"}</button>
-                  </div>
-                </>;
-              })()}
-            </>}
-          </>}
-
-          {/* ── NOTES ── */}
+          {/* ── NOTES TAB ── */}
           {tab==="notes"&&<>
             <div className="card">
               <div className="ct"><span>Tasting Notes</span></div>
@@ -812,7 +639,7 @@ export default function PourOverTracker() {
             </div>}
             <div className="notion-banner">
               <div className="notion-dot"/>
-              <div className="notion-txt"><strong>Sync to Notion</strong> sends actual brew data to all 4 databases.<br/>Requires <code>node server.js</code> running on port 3001.</div>
+              <div className="notion-txt"><strong>Sync to Notion</strong> saves the full session including Timemore pour data.<br/>Fetch your brew from Timemore first, then fill in bean &amp; sensory details.</div>
             </div>
             <div className="ar">
               <button className="ab2 clr" onClick={clearNotes}>✕ Clear Notes</button>
