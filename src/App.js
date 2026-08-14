@@ -319,7 +319,7 @@ export default function BrewTracker() {
 
   const applyNotionEquip = (item) => {
     setSelectedEquipId(item.id);
-    const isBrewer = /brewer｜espress/i.test(item.type), isGrinder = /grinder/i.test(item.type);
+    const isBrewer = /brewer/i.test(item.type), isGrinder = /grinder/i.test(item.type);
     setRecipe(r => ({ ...r, equipment: { ...r.equipment, ...(isBrewer?{brewTool:item.name,_brewerNotionId:item.id}:{}), ...(isGrinder?{grinder:item.name,_grinderNotionId:item.id}:{}) } }));
     notify(`Loaded: ${item.name}`);
   };
