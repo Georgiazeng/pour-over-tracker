@@ -101,7 +101,7 @@ function segmentPours(triples) {
     const future = smoothed.filter(q => q.ms > p.ms && q.ms <= tEnd);
     if (future.length === 0) return false;
     const maxAhead = Math.max(...future.map(q => q.w));
-    return maxAhead - p.ms > 0 && maxAhead - p.w > POUR_THRESHOLD;
+    return maxAhead - p.w > POUR_THRESHOLD;
   });
 
   // Step 3: Merge short gaps in rising regions (jitter tolerance)
