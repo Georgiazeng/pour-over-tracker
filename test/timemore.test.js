@@ -67,3 +67,36 @@ assert.strictEqual(extractWorkId("https://bm.timemore.com/v4/share/258231"), "25
 assert.strictEqual(extractWorkId("258231"), "258231");
 assert.strictEqual(extractWorkId("https://example.com/x"), null);
 console.log("✓ work ID extraction");
+
+// ── Regression: real bump from brew 258231 (180 → 338 → 180 g in ~1 s) ──────
+{
+  const spike = { 78600: 181.4, 78700: 191.3, 78800: 193.9, 78900: 196.3, 79000: 195.7, 79100: 200.2,
+    79200: 258.8, 79300: 317.7, 79400: 338.6, 79500: 293.9, 79600: 192.9, 79700: 182.6, 79800: 180.2 };
+  const t2 = [];
+  for (let ms = 0; ms <= 145400; ms += 100) {
+    const t = ms / 1000;
+    let w;
+    if (t <= 8.4) w = (55.6 / 8.4) * t;
+    else if (t < 32.4) w = 55.6;
+    else if (t <= 48.9) w = 55.6 + (t - 32.4) * (124.8 / 16.5);
+    else if (ms in spike) w = spike[ms];
+    else if (t < 82.8) w = t < 78.6 ? 180.3 : 180.1;
+    else if (t <= 91.1) w = 180.1 + (t - 82.8) * (62 / 8.3);
+    else w = 242.1;
+    t2.push([ms, t > 144 ? "206.5" : "0.0", w.toFixed(1)]);
+  }
+  const r = summariseCurve(t2);
+  assert.strictEqual(r.pourCount, 3, `pours ${r.pourCount}:\n${r.brewLog}`);
+  assert.ok(r.pours.every((p) => p.volume > 0 && p.avgSpeedGps < 15), r.brewLog);
+  assert.ok(Math.abs(r.pours[2].startSec - 82.8) < 1, `3rd pour start ${r.pours[2].startSec}`);
+  assert.ok(Math.abs(r.pours[2].volume - 62) < 2, `3rd pour volume ${r.pours[2].volume}`);
+  console.log("✓ bump at 79 s ignored\n" + r.brewLog);
+}
+
+// ── Regression: HTML comment must not leak into the brew comment ──────────────
+{
+  const html = htmlA.replace("<div>自我评价</div>", "<!-- <div>#未选择</div> --><div>自我评价</div>");
+  const s = parseSharePage(html);
+  assert.strictEqual(s.comment, "怎么就是冲不出第一次的那个感觉了 好奇怪！！");
+  console.log("✓ HTML comments stripped");
+}
