@@ -139,3 +139,39 @@ const series = (startMs, values) => Object.fromEntries(values.map((v, i) => [sta
   assert.ok(Math.abs(r.pours[1].volume - 47.3) < 1.5 && Math.abs(r.pours[2].volume - 144.5) < 1.5, r.brewLog);
   console.log("✓ 253317: blip at 128 s ignored\n" + r.brewLog);
 }
+
+// ── Espresso shot 256735 (Timemore brew_type "italian") ──────────────────────
+{
+  const { summariseEspresso } = require("../lib/timemore");
+  const lines = fs.readFileSync(path.join(__dirname, "fixtures/share-256735-espresso.txt"), "utf8").trim().split("\n");
+  const s = parseSharePage(`<body>${lines.map((l) => `<div>${l}</div>`).join("")}</body>`);
+  assert.strictEqual(s.method, "Espresso");
+  assert.strictEqual(s.dose, 18);
+  assert.strictEqual(s.yield, 44.6);
+  assert.strictEqual(s.brewRatio, 2.5);
+  assert.strictEqual(s.water, null);
+  assert.strictEqual(s.totalTime, 53);
+  assert.strictEqual(s.grind, 25, "grind must not swallow the machine line");
+  assert.strictEqual(s.temp, 93);
+  assert.strictEqual(s.comment, "过细了");
+  console.log("✓ espresso share page");
+
+  // Cup weight once per second from the real shot (column 1), including the cup bump at 49–51 s
+  const perSec = [3.1, 4.3, 5.4, 6.4, 7.1, 7.5, 7.8, 8.2, 8.5, 8.9, 9.3, 9.7, 10.2, 10.7, 11.2, 11.7, 12.4, 13, 13.8, 14.5,
+    15.4, 16.2, 17, 18, 18.9, 19.9, 20.9, 21.9, 23, 24, 25.1, 26.2, 27.3, 28.4, 29.5, 30.6, 31.8, 32.9, 34, 35.1,
+    36.2, 37.3, 38.5, 39.6, 40.6, 41.7, 42.5, 43.1, 43.8, 44.2, 43.4, 43.5, 44.6, 44.6];
+  const triples = [];
+  for (let ms = 0; ms <= 53700; ms += 100) {
+    const k = Math.min(Math.floor(ms / 1000), perSec.length - 2);
+    const f = ms / 1000 - k;
+    const w = ms >= 50000 && ms < 52000 ? perSec[Math.floor(ms / 1000)] : perSec[k] + (perSec[k + 1] - perSec[k]) * f;
+    triples.push([ms, w.toFixed(1), "0.0"]);
+  }
+  const e = summariseEspresso(triples);
+  assert.strictEqual(e.yield, 44.6);
+  assert.ok(e.peakFlow >= 1 && e.peakFlow <= 1.3, `peak ${e.peakFlow}`);
+  assert.ok(e.avgFlow > 0.8 && e.avgFlow < 0.95, `avg ${e.avgFlow}`);
+  assert.ok(e.flowEnd > 50 && e.flowEnd <= 53, `flow end ${e.flowEnd}`);
+  console.log("✓ espresso flow", { avg: e.avgFlow, peak: e.peakFlow, end: e.flowEnd });
+  console.log(e.brewLog);
+}

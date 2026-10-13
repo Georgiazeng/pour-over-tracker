@@ -330,7 +330,9 @@ app.post("/brews", async (req, res) => {
     const dbId = process.env.NOTION_BREWS_DB;
     if (!dbId) return res.status(400).json({ error: "NOTION_BREWS_DB not set" });
     const b = req.body || {};
-    const missing = ["beanId", "brewerId", "grinderId", "grind", "temp", "plannedRatio", "dose", "water"]
+    const espresso = b.method === "Espresso";
+    // Espresso has no water amount; yield is what matters instead
+    const missing = ["beanId", "brewerId", "grinderId", "grind", "temp", "plannedRatio", "dose", espresso ? "yield" : "water"]
       .filter((k) => b[k] === "" || b[k] == null);
     if (missing.length) return res.status(400).json({ error: `Missing: ${missing.join(", ")}` });
 
@@ -350,6 +352,7 @@ app.post("/brews", async (req, res) => {
         "Brew": { title: rt(title) },
         ...(b.date && { "Date": { date: { start: b.date } } }),
         "Status": { select: { name: hasTasting ? "Tasted" : "Imported" } },
+        "Method": { select: { name: espresso ? "Espresso" : "Pour Over" } },
         ...(b.workId && { "Timemore ID": { rich_text: rt(b.workId) } }),
         ...(b.link && { "Timemore Link": { url: b.link } }),
         "Bean": { relation: [{ id: b.beanId }] },
@@ -367,6 +370,7 @@ app.post("/brews", async (req, res) => {
         "Bloom Time (s)": numProp(b.bloomTime),
         "Pours": numProp(b.pourCount),
         "Avg Flow (g/s)": numProp(b.avgFlow),
+        "Peak Flow (g/s)": numProp(b.peakFlow),
         ...(b.brewLog && { "Brew Log": { rich_text: rt(b.brewLog) } }),
         "Rating": numProp(b.rating),
         "Acidity": numProp(b.acidity),

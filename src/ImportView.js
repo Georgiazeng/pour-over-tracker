@@ -6,11 +6,13 @@ import { css, WeightChart, ScoreSlider, formatTime } from "./LegacyTracker";
 const ISSUES = ["Sour", "Bitter", "Thin", "Flat", "Astringent", "Muddy"];
 const PROCESSES = ["Washed", "Natural", "Honey", "Anaerobic Washed", "Anaerobic Natural", "Washed Therm Shock", "Yeast Inoculated Double Fermentation", "Anaerobic Slow Dried"];
 const ROAST_LEVELS = ["Light", "Light-Medium", "Medium Light", "Medium", "Dark", "Decaf"];
-const REQUIRED = [
-  ["beanId", "Bean"], ["brewerId", "Brewer"], ["grinderId", "Grinder"],
+// Espresso has no water amount; the yield in the cup is required instead
+const requiredFor = (method) => [
+  ["beanId", "Bean"], ["brewerId", method === "Espresso" ? "Machine" : "Brewer"], ["grinderId", "Grinder"],
   ["grind", "Grind"], ["temp", "Temp"], ["plannedRatio", "Planned ratio"],
-  ["dose", "Dose"], ["water", "Water"],
+  ["dose", "Dose"], method === "Espresso" ? ["yield", "Yield"] : ["water", "Water"],
 ];
+const isEspresso = (it) => it?.data?.method === "Espresso";
 const LAST_EQUIP_KEY = "pot:lastEquipment";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -93,8 +95,8 @@ function initialForm(data, lastEquip) {
     temp: data.temp ?? "",
     plannedRatio: "",
     beanId: "",
-    brewerId: lastEquip.brewerId || "",
-    grinderId: lastEquip.grinderId || "",
+    brewerId: (lastEquip[data.method] || (data.method === "Espresso" ? {} : lastEquip)).brewerId || "",
+    grinderId: (lastEquip[data.method] || (data.method === "Espresso" ? {} : lastEquip)).grinderId || "",
     rating: data.rating ?? 0,
     acidity: 0, sweetness: 0, bitterness: 0, aroma: 0,
     issues: [],
@@ -216,7 +218,7 @@ export default function ImportView({ onOpenLegacy }) {
   };
 
   // ── Save ────────────────────────────────────────────────────────────────────
-  const missingFor = (it) => (it.form ? REQUIRED.filter(([k]) => blank(it.form[k])).map(([, l]) => l) : []);
+  const missingFor = (it) => (it.form ? requiredFor(it.data?.method).filter(([k]) => blank(it.form[k])).map(([, l]) => l) : []);
 
   const saveOne = async (it) => {
     const missing = missingFor(it);
@@ -237,14 +239,15 @@ export default function ImportView({ onOpenLegacy }) {
           beanName: bean?.name,
           workId: d.workId, link: d.link,
           timemoreBean: tb ? [tb.name, tb.origin, tb.process, tb.roast].filter(Boolean).join(" · ") : "",
-          bloomGrams: d.bloomGrams, bloomTime: d.bloomTime, pourCount: d.pourCount, avgFlow: d.avgFlow,
+          method: d.method,
+          bloomGrams: d.bloomGrams, bloomTime: d.bloomTime, pourCount: d.pourCount, avgFlow: d.avgFlow, peakFlow: d.peakFlow,
           brewLog: d.brewLog,
         }),
       });
       const res = await r.json();
       if (r.status === 409) { patch(it.key, { status: "duplicate", notionUrl: res.url }); return true; }
       if (!r.ok) throw new Error(res.error || "Save failed");
-      writeLastEquipment({ brewerId: f.brewerId, grinderId: f.grinderId });
+      writeLastEquipment({ ...readLastEquipment(), [d.method || "Pour Over"]: { brewerId: f.brewerId, grinderId: f.grinderId } });
       patch(it.key, { status: "saved", notionUrl: res.url });
       return true;
     } catch (err) {
@@ -345,7 +348,10 @@ function BrewCard({ it, beans, equipment, missing, onForm, onSave, onRetry, onRe
 
   const head = (
     <div className="ct">
-      <span>{it.data?.date || "…"}{it.data?.title ? ` · ${it.data.title}` : ""}</span>
+      <span>
+        {it.data?.method && <span className={`method ${isEspresso(it) ? "esp" : ""}`}>{it.data.method}</span>}
+        {it.data?.date || "…"}{it.data?.title ? ` · ${it.data.title}` : ""}
+      </span>
       <span className="ct-right">
         {it.workId && <span className="wid">#{it.workId}</span>}
         {it.status !== "saving" && <button className="x" onClick={onRemove} aria-label="Remove">×</button>}
@@ -379,7 +385,10 @@ function BrewCard({ it, beans, equipment, missing, onForm, onSave, onRetry, onRe
   const brewRatio = f.dose > 0 && f.yield > 0 ? round1(f.yield / f.dose) : null;
   const tb = d.timemoreBean;
   const suggestion = !f.beanId ? suggestBean(tb, beans) : null;
-  const brewers = equipment.filter((e) => e.type === "Brewer");
+  const espresso = isEspresso(it);
+  const brewerType = espresso ? "Espresso Machine" : "Brewer";
+  const brewerLabel = espresso ? "Machine" : "Brewer";
+  const brewers = equipment.filter((e) => e.type === brewerType);
   const grinders = equipment.filter((e) => e.type === "Grinder");
   const num = (k) => (e) => onForm({ [k]: e.target.value === "" ? "" : Number(e.target.value) });
 
@@ -397,12 +406,34 @@ function BrewCard({ it, beans, equipment, missing, onForm, onSave, onRetry, onRe
 
           <div className="brew-summary-grid">
             <div className="stat"><div className="sv">{f.dose || "—"}g</div><div className="sl">Dose</div></div>
-            <div className="stat"><div className="sv">{f.water || "—"}g</div><div className="sl">Water</div></div>
-            <div className="stat"><div className="sv">{actualRatio ? `1:${actualRatio}` : "—"}</div><div className="sl">Actual ratio</div></div>
+            {espresso ? (
+              <>
+                <div className="stat"><div className="sv">{f.yield || "—"}g</div><div className="sl">Yield</div></div>
+                <div className="stat"><div className="sv">{brewRatio ? `1:${brewRatio}` : "—"}</div><div className="sl">Ratio</div></div>
+              </>
+            ) : (
+              <>
+                <div className="stat"><div className="sv">{f.water || "—"}g</div><div className="sl">Water</div></div>
+                <div className="stat"><div className="sv">{actualRatio ? `1:${actualRatio}` : "—"}</div><div className="sl">Actual ratio</div></div>
+              </>
+            )}
             <div className="stat"><div className="sv">{formatTime(f.totalTime)}</div><div className="sl">Time</div></div>
           </div>
 
-          {d.pours?.length > 0 && (
+          {espresso && d.rawPoints?.length > 0 && (
+            <>
+              <button className="linkbtn" onClick={() => setShowPours((v) => !v)}>
+                {showPours ? "Hide" : "Show"} shot curve · avg {d.avgFlow} g/s · peak {d.peakFlow} g/s
+              </button>
+              {showPours && (
+                <div style={{ marginTop: 10 }}>
+                  <WeightChart rawPoints={d.rawPoints} pours={[]} />
+                  <p className="hint" style={{ whiteSpace: "pre-line" }}>{d.brewLog}</p>
+                </div>
+              )}
+            </>
+          )}
+          {!espresso && d.pours?.length > 0 && (
             <>
               <button className="linkbtn" onClick={() => setShowPours((v) => !v)}>
                 {showPours ? "Hide" : "Show"} curve · {d.pourCount} pours · bloom {d.bloomGrams}g / {d.bloomTime}s · avg {d.avgFlow} g/s
@@ -447,7 +478,7 @@ function BrewCard({ it, beans, equipment, missing, onForm, onSave, onRetry, onRe
 
           {/* Equipment */}
           <div className="g2" style={{ marginTop: 14 }}>
-            {[["brewerId", "Brewer", brewers], ["grinderId", "Grinder", grinders]].map(([field, label, list]) => (
+            {[["brewerId", brewerLabel, brewers], ["grinderId", "Grinder", grinders]].map(([field, label, list]) => (
               <div key={field} className={`f ${need(field) ? "need" : ""}`}>
                 <label>{label} *</label>
                 <select value={f[field]} onChange={(e) => onForm({ [field]: e.target.value })}>
@@ -462,7 +493,7 @@ function BrewCard({ it, beans, equipment, missing, onForm, onSave, onRetry, onRe
           </div>
           {newEquip && (
             <NewEquipmentForm
-              type={newEquip === "brewerId" ? "Brewer" : "Grinder"}
+              type={newEquip === "brewerId" ? brewerType : "Grinder"}
               notify={notify}
               onCreated={(e) => { onEquipmentCreated(e, newEquip); setNewEquip(null); }}
             />
@@ -472,13 +503,15 @@ function BrewCard({ it, beans, equipment, missing, onForm, onSave, onRetry, onRe
           <div className="g3" style={{ marginTop: 14 }}>
             <div className={`f ${need("grind") ? "need" : ""}`}><label>Grind *</label><input type="number" step="0.1" inputMode="decimal" value={f.grind} onChange={num("grind")} /></div>
             <div className={`f ${need("temp") ? "need" : ""}`}><label>Temp °C *</label><input type="number" inputMode="decimal" value={f.temp} onChange={num("temp")} /></div>
-            <div className={`f ${need("plannedRatio") ? "need" : ""}`}><label>Planned 1:x *</label><input type="number" step="0.1" inputMode="decimal" placeholder={actualRatio || "16"} value={f.plannedRatio} onChange={num("plannedRatio")} /></div>
+            <div className={`f ${need("plannedRatio") ? "need" : ""}`}><label>{espresso ? "Planned 1:x yield *" : "Planned 1:x *"}</label><input type="number" step="0.1" inputMode="decimal" placeholder={espresso ? brewRatio || "2" : actualRatio || "16"} value={f.plannedRatio} onChange={num("plannedRatio")} /></div>
             <div className={`f ${need("dose") ? "need" : ""}`}><label>Dose g *</label><input type="number" step="0.1" inputMode="decimal" value={f.dose} onChange={num("dose")} /></div>
-            <div className={`f ${need("water") ? "need" : ""}`}><label>Water g *</label><input type="number" step="0.1" inputMode="decimal" value={f.water} onChange={num("water")} /></div>
-            <div className="f"><label>Yield g</label><input type="number" step="0.1" inputMode="decimal" value={f.yield} onChange={num("yield")} /></div>
+            {!espresso && <div className={`f ${need("water") ? "need" : ""}`}><label>Water g *</label><input type="number" step="0.1" inputMode="decimal" value={f.water} onChange={num("water")} /></div>}
+            <div className={`f ${need("yield") ? "need" : ""}`}><label>{espresso ? "Yield g *" : "Yield g"}</label><input type="number" step="0.1" inputMode="decimal" value={f.yield} onChange={num("yield")} /></div>
           </div>
           <p className="hint" style={{ marginTop: 6 }}>
-            Actual {actualRatio ? `1:${actualRatio}` : "—"} · Brew ratio {brewRatio ? `1:${brewRatio}` : "—"} · Date
+            {espresso
+              ? <>Ratio {brewRatio ? `1:${brewRatio}` : "—"} · {formatTime(f.totalTime)} · Date</>
+              : <>Actual {actualRatio ? `1:${actualRatio}` : "—"} · Brew ratio {brewRatio ? `1:${brewRatio}` : "—"} · Date</>}
             <input className="inline-date" type="date" value={f.date} onChange={(e) => onForm({ date: e.target.value })} />
           </p>
 
@@ -620,5 +653,7 @@ const importCss = `
 .saved-card{opacity:.75}
 .ab2:disabled{opacity:.5;cursor:not-allowed}
 .status-banner a{color:inherit}
+.method{display:inline-block;margin-right:8px;padding:2px 7px;border-radius:6px;background:#efe3d3;color:#8b5a2b;font-size:9px;letter-spacing:.08em}
+.method.esp{background:#f6dcd4;color:#a0412a}
 .notif{white-space:normal;max-width:90vw;text-align:center}
 `;
