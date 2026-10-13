@@ -100,3 +100,42 @@ console.log("✓ work ID extraction");
   assert.strictEqual(s.comment, "怎么就是冲不出第一次的那个感觉了 好奇怪！！");
   console.log("✓ HTML comments stripped");
 }
+
+// ── Real brews 253216 and 253317 (shared 13 Oct 2026) ─────────────────────────
+// Key points come from the 500 ms samples; every bump uses the exact 100 ms values.
+function curve(keypoints, overlay, endMs) {
+  const out = [];
+  for (let ms = 0; ms <= endMs; ms += 100) {
+    let w;
+    if (ms in overlay) w = overlay[ms];
+    else {
+      let k = 0;
+      while (k < keypoints.length - 1 && keypoints[k + 1][0] <= ms) k++;
+      const [m0, w0] = keypoints[k], [m1, w1] = keypoints[Math.min(k + 1, keypoints.length - 1)];
+      w = m1 > m0 ? w0 + ((w1 - w0) * (ms - m0)) / (m1 - m0) : w0;
+    }
+    out.push([ms, "0.0", w.toFixed(1)]);
+  }
+  return out;
+}
+const series = (startMs, values) => Object.fromEntries(values.map((v, i) => [startMs + i * 100, v]));
+
+{
+  const bump1 = series(87500, [185.3, 184.9, 186.3, 186.3, 186.4, 186.6, 186.6, 185.1, 176, 171.4, 168.5, 171.5, 187.3, 218, 303.4, 335.6, 353.7, 232.5, 196.5, 186.8, 186.5, 186.4, 186.5]);
+  const bump2 = series(128100, [281, 292.3, 290.7, 283.5, 283.7, 285.2, 292.8, 300.4, 309.7, 347.2, 351.6, 403.9, 426.6, 501.7, 510.2, 553.7, 562.1, 444.3, 474.7, 271.2, 256.1, 251, 251.7, 250.8, 250.2, 249.9, 250.1, 249.9, 250.3, 250.2, 251.2, 251.1, 251, 250.9, 250.7]);
+  const blip = { 121000: 251.5 };
+  const kp = [[0, 0.9], [7500, 54.8], [37000, 54.7], [52300, 186.9], [87400, 186.7], [93500, 186.6], [100700, 251.1], [162000, 250.6]];
+  const r = summariseCurve(curve(kp, { ...bump1, ...bump2, ...blip }, 162000));
+  assert.strictEqual(r.pourCount, 3, `253216 pours ${r.pourCount}:\n${r.brewLog}`);
+  assert.ok(Math.abs(r.pours[0].volume - 54) < 1.5 && Math.abs(r.pours[1].volume - 132) < 1.5 && Math.abs(r.pours[2].volume - 64.4) < 1.5, r.brewLog);
+  assert.ok(Math.abs(r.pours[2].startSec - 93.5) < 0.6, r.brewLog);
+  console.log("✓ 253216: two bumps ignored\n" + r.brewLog);
+}
+{
+  const bump = series(127800, [245.2, 257, 257.9, 257.1, 256.3, 245.4, 241.7, 240.8]);
+  const kp = [[0, 0.8], [7300, 49.9], [38600, 49.7], [45600, 97], [75200, 96.7], [97300, 241.2], [138500, 240.7]];
+  const r = summariseCurve(curve(kp, bump, 138500));
+  assert.strictEqual(r.pourCount, 3, `253317 pours ${r.pourCount}:\n${r.brewLog}`);
+  assert.ok(Math.abs(r.pours[1].volume - 47.3) < 1.5 && Math.abs(r.pours[2].volume - 144.5) < 1.5, r.brewLog);
+  console.log("✓ 253317: blip at 128 s ignored\n" + r.brewLog);
+}
