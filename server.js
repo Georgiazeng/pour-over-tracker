@@ -3,6 +3,8 @@ const cors = require("cors");
 require("dotenv").config();
 
 const path = require('path');
+const { segmentPours } = require("./lib/segmentPours");
+const { importWork, extractWorkId } = require("./lib/timemore");
 
 const app = express();
 app.use(cors());
@@ -40,7 +42,7 @@ app.get("/timemore/:workId", async (req, res) => {
     const raw = await r.json();
     if (raw.status !== "success") return res.status(400).json({ error: "Timemore API error", detail: raw });
 
-    // Parse the data field — it's a stringified JSON array of [time_ms, flow_rate, cumulative_weight]
+    // Parse the data field — it's a stringified JSON array of [time_ms, beverage_weight, scale_weight]
     let triples;
     try {
       triples = typeof raw.data === "string" ? JSON.parse(raw.data) : raw.data;
@@ -66,314 +68,6 @@ app.get("/timemore/:workId", async (req, res) => {
   }
 });
 
-// ── Pour segmentation algorithm ───────────────────────────────────────────────
-function segmentPours(triples) {
-  // triples: [[time_ms, flow_rate_str, cumulative_weight_str], ...]
-  const points = triples.map(t => ({
-    ms: Number(t[0]),
-    w: parseFloat(t[2])
-  }));
-
-  if (points.length === 0) {
-    return { pours: [], totalWater: 0, totalTime: 0 };
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // Step 1: Smooth out large transient spikes
-  // ────────────────────────────────────────────────────────────────────────────
-  const smoothed = points.map((p, i) => {
-    if (i === 0 || i >= points.length - 2) return p;
-
-    const prev = points[i - 1].w;
-    const next1 = points[i + 1].w;
-    const delta = p.w - prev;
-    const recovery = next1 - p.w;
-
-    // If there is a large spike that immediately reverses,
-    // replace it with an interpolated value.
-    if (
-      Math.abs(delta) > 5 &&
-      Math.sign(recovery) === -Math.sign(delta)
-    ) {
-      return {
-        ms: p.ms,
-        w: (prev + next1) / 2
-      };
-    }
-
-    return p;
-  });
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // Step 2: Parameters
-  // ────────────────────────────────────────────────────────────────────────────
-
-  // Look ahead this far to decide whether weight is actually increasing.
-  const WINDOW_MS = 500;
-
-  // Minimum cumulative increase over WINDOW_MS to count as active pouring.
-  const POUR_THRESHOLD = 0.3;
-
-  // Small scale fluctuations below this are treated as noise.
-  const NOISE_TOLERANCE = 0.2;
-
-  // A plateau must last this long before it is considered a real
-  // separation between pours.
-  const PLATEAU_MIN_DURATION_MS = 2000;
-
-  // Short interruptions during an otherwise continuous pour are tolerated.
-  const JITTER_GAP_MS = 1500;
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // Step 3: Identify "rising" windows
-  // ────────────────────────────────────────────────────────────────────────────
-  const rising = smoothed.map((p, i) => {
-    const tEnd = p.ms + WINDOW_MS;
-
-    const future = smoothed.filter(
-      q => q.ms > p.ms && q.ms <= tEnd
-    );
-
-    if (future.length === 0) return false;
-
-    const maxAhead = Math.max(...future.map(q => q.w));
-
-    // Only count meaningful increases.
-    // ±0.1–0.2g scale fluctuations do not count as pouring.
-    return (maxAhead - p.w) > POUR_THRESHOLD;
-  });
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // Step 4: Merge short gaps caused by scale noise
-  // ────────────────────────────────────────────────────────────────────────────
-  const merged = [...rising];
-
-  for (let i = 1; i < smoothed.length - 1; i++) {
-    if (!merged[i]) {
-      const gapEnd = smoothed.findIndex(
-        (p, j) => j > i && merged[j]
-      );
-
-      if (gapEnd !== -1) {
-        const gapDuration =
-          smoothed[gapEnd].ms - smoothed[i - 1].ms;
-
-        if (gapDuration < JITTER_GAP_MS) {
-          for (let k = i; k < gapEnd; k++) {
-            merged[k] = true;
-          }
-        }
-      }
-    }
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // Step 5: Extract pour segments
-  // ────────────────────────────────────────────────────────────────────────────
-  const segments = [];
-
-  let inPour = false;
-  let pourStart = 0;
-
-  for (let i = 0; i < smoothed.length; i++) {
-    // Start of a pour
-    if (merged[i] && !inPour) {
-      inPour = true;
-      pourStart = i;
-      continue;
-    }
-
-    // Potential end of a pour
-    if (!merged[i] && inPour) {
-      const plateauStart = smoothed[i].ms;
-
-      const nextRising = smoothed.findIndex(
-        (p, j) => j > i && merged[j]
-      );
-
-      const plateauEnd =
-        nextRising !== -1
-          ? smoothed[nextRising].ms
-          : smoothed[smoothed.length - 1].ms;
-
-      const plateauDuration =
-        plateauEnd - plateauStart;
-
-      if (
-        plateauDuration >= PLATEAU_MIN_DURATION_MS ||
-        nextRising === -1
-      ) {
-        // ─────────────────────────────────────────────────────────────────────
-        // IMPORTANT:
-        //
-        // Do not automatically use i - 1 as the pour endpoint.
-        //
-        // The scale can fluctuate:
-        //
-        //   32.3
-        //   32.4
-        //   32.5  <- actual end of pouring
-        //   32.4
-        //   32.5
-        //   32.4
-        //
-        // The final points are scale noise, not additional pouring.
-        //
-        // Find the highest meaningful weight reached before the plateau.
-        // ─────────────────────────────────────────────────────────────────────
-
-        let endIdx = i - 1;
-        let maxWeight = smoothed[endIdx].w;
-
-        for (let j = i - 1; j >= pourStart; j--) {
-          const weight = smoothed[j].w;
-
-          // If this point is meaningfully higher, use it as the endpoint.
-          if (weight > maxWeight + NOISE_TOLERANCE) {
-            maxWeight = weight;
-            endIdx = j;
-          }
-        }
-
-        // More robustly, find the LAST point that is within the noise
-        // tolerance of the maximum weight reached during the pour.
-        //
-        // This prevents a tiny 0.1–0.2g fluctuation from moving the endpoint.
-        const stableMaxWeight = maxWeight;
-
-        for (let j = i - 1; j >= pourStart; j--) {
-          if (
-            stableMaxWeight - smoothed[j].w <= NOISE_TOLERANCE
-          ) {
-            endIdx = j;
-          } else {
-            break;
-          }
-        }
-
-        segments.push({
-          startIdx: pourStart,
-          endIdx
-        });
-
-        inPour = false;
-      }
-    }
-  }
-
-  // Close final pour
-  if (inPour) {
-    let endIdx = smoothed.length - 1;
-
-    // Find maximum weight during final pour.
-    let maxWeight = smoothed[endIdx].w;
-
-    for (let j = endIdx - 1; j >= pourStart; j--) {
-      if (smoothed[j].w > maxWeight) {
-        maxWeight = smoothed[j].w;
-        endIdx = j;
-      }
-    }
-
-    // Move endpoint backward through insignificant fluctuations.
-    for (let j = endIdx - 1; j >= pourStart; j--) {
-      if (
-        maxWeight - smoothed[j].w <= NOISE_TOLERANCE
-      ) {
-        endIdx = j;
-      } else {
-        break;
-      }
-    }
-
-    segments.push({
-      startIdx: pourStart,
-      endIdx
-    });
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // Step 6: Build pour objects
-  // ────────────────────────────────────────────────────────────────────────────
-  const pourLabels = [
-    "Bloom",
-    "2nd Pour",
-    "3rd Pour",
-    "4th Pour",
-    "5th Pour"
-  ];
-
-  const pours = segments.map((seg, idx) => {
-    const startPt = smoothed[seg.startIdx];
-    const endPt = smoothed[seg.endIdx];
-
-    // Previous stable endpoint.
-    const prevEnd =
-      idx > 0
-        ? smoothed[segments[idx - 1].endIdx].w
-        : 0;
-
-    const volume =
-      Math.round(
-        (endPt.w - prevEnd) * 10
-      ) / 10;
-
-    const startSec =
-      Math.round(startPt.ms / 100) / 10;
-
-    const endSec =
-      Math.round(endPt.ms / 100) / 10;
-
-    const durationSec =
-      Math.round(
-        (endPt.ms - startPt.ms) / 100
-      ) / 10;
-
-    const avgSpeed =
-      durationSec > 0
-        ? Math.round(
-            (volume / durationSec) * 10
-          ) / 10
-        : 0;
-
-    return {
-      label: pourLabels[idx] || `Pour ${idx + 1}`,
-      startSec,
-      endSec,
-      durationSec,
-      volume,
-      cumulativeWater:
-        Math.round(endPt.w * 10) / 10,
-      avgSpeedGps: avgSpeed
-    };
-  });
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // Step 7: Overall brew information
-  // ────────────────────────────────────────────────────────────────────────────
-  const totalTime =
-    smoothed.length > 0
-      ? Math.round(
-          smoothed[smoothed.length - 1].ms / 100
-        ) / 10
-      : 0;
-
-  const totalWater =
-    smoothed.length > 0
-      ? Math.round(
-          smoothed[smoothed.length - 1].w * 10
-        ) / 10
-      : 0;
-
-  return {
-    pours,
-    totalWater,
-    totalTime
-  };
-}
-
-
-
 // ── GET /notion-beans ─────────────────────────────────────────────────────────
 // Filtered to Status = "Using"
 app.get("/notion-beans", async (req, res) => {
@@ -383,8 +77,10 @@ app.get("/notion-beans", async (req, res) => {
     const r = await fetch(`${NOTION_API}/databases/${dbId}/query`, {
       method: "POST", headers: headers(),
       body: JSON.stringify({
-        page_size: 50,
-        filter: { property: "Status", status: { equals: "Using" } },
+        page_size: 100,
+        // ?all=1 returns every bean (Using first); default keeps the old "Using only" behaviour
+        ...(req.query.all ? {} : { filter: { property: "Status", status: { equals: "Using" } } }),
+        sorts: [{ timestamp: "created_time", direction: "descending" }],
       })
     });
     const data = await r.json();
@@ -400,7 +96,10 @@ app.get("/notion-beans", async (req, res) => {
       roaster: textVal(p.properties["Roaster"]),
       roastDate: dateVal(p.properties["Roast Date"]),
       notes: textVal(p.properties["Notes"]),
+      status: p.properties["Status"]?.status?.name || "",
     })).filter(i => i.name);
+    const rank = { Using: 0, Unopen: 1 };
+    items.sort((a, b) => (rank[a.status] ?? 2) - (rank[b.status] ?? 2));
     res.json({ items });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -410,7 +109,7 @@ app.get("/notion-equipment", async (req, res) => {
   try {
     const dbId = process.env.NOTION_EQUIPMENT_DB;
     if (!dbId) return res.status(400).json({ error: "NOTION_EQUIPMENT_DB not set in .env" });
-    const r = await fetch(`${NOTION_API}/databases/${dbId}/query`, { method: "POST", headers: headers(), body: JSON.stringify({ page_size: 50 }) });
+    const r = await fetch(`${NOTION_API}/databases/${dbId}/query`, { method: "POST", headers: headers(), body: JSON.stringify({ page_size: 100 }) });
     const data = await r.json();
     if (data.object === "error") return res.status(400).json({ error: data.message });
     const items = data.results.map(p => ({
@@ -540,6 +239,145 @@ app.post("/sync", async (req, res) => {
     }
 
     res.json({ success: true, sessionId, notionPageId: sessionData.id, message: `Synced as ${sessionId}` });
+  } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+});
+
+
+// ══ Timemore import flow ═════════════════════════════════════════════════════
+const rt = (s) => (s ? [{ text: { content: String(s).slice(0, 2000) } }] : []);
+const numProp = (v) => ({ number: v === "" || v == null || Number.isNaN(Number(v)) ? null : Number(v) });
+
+async function notion(pathname, body, method = "POST") {
+  const r = await fetch(`${NOTION_API}${pathname}`, { method, headers: headers(), body: body ? JSON.stringify(body) : undefined });
+  const data = await r.json();
+  if (data.object === "error") throw new Error(data.message);
+  return data;
+}
+
+// GET /timemore/import/:id — share page + curve for one brew (id may be a share URL)
+app.get("/timemore/import/:id", async (req, res) => {
+  const id = extractWorkId(req.params.id);
+  if (!id) return res.status(400).json({ error: "Not a Timemore work ID or share link" });
+  try {
+    res.json(await importWork(id));
+  } catch (err) {
+    console.error("Timemore import error:", err);
+    res.status(502).json({ error: err.message, workId: id });
+  }
+});
+
+// GET /brews/existing?ids=1,2,3 — which Timemore IDs are already in the Brews DB
+app.get("/brews/existing", async (req, res) => {
+  try {
+    const dbId = process.env.NOTION_BREWS_DB;
+    if (!dbId) return res.status(400).json({ error: "NOTION_BREWS_DB not set" });
+    const ids = String(req.query.ids || "").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 100);
+    if (!ids.length) return res.json({ existing: {} });
+    const data = await notion(`/databases/${dbId}/query`, {
+      page_size: 100,
+      filter: { or: ids.map((id) => ({ property: "Timemore ID", rich_text: { equals: id } })) },
+    });
+    const existing = {};
+    for (const p of data.results) existing[textVal(p.properties["Timemore ID"])] = p.url;
+    res.json({ existing });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /notion-beans — create a bean from the review card
+app.post("/notion-beans", async (req, res) => {
+  try {
+    const dbId = process.env.NOTION_BEANS_DB;
+    const b = req.body || {};
+    if (!b.name) return res.status(400).json({ error: "Bean name is required" });
+    const page = await notion("/pages", {
+      parent: { database_id: dbId },
+      properties: {
+        "Bean Name": { title: rt(b.name) },
+        "Status": { status: { name: "Using" } },
+        ...(b.roaster && { "Roaster": { rich_text: rt(b.roaster) } }),
+        ...(b.origin && { "Origin": { rich_text: rt(b.origin) } }),
+        ...(b.process && { "Process": { select: { name: b.process } } }),
+        ...(b.roastLevel && { "Roast Level": { select: { name: b.roastLevel } } }),
+        ...(b.roastDate && { "Roast Date": { date: { start: b.roastDate } } }),
+      },
+    });
+    res.json({ item: { id: page.id, name: b.name, roaster: b.roaster || "", origin: b.origin || "", process: b.process || "", roastLevel: b.roastLevel || "", status: "Using" } });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /notion-equipment — create equipment from the review card
+app.post("/notion-equipment", async (req, res) => {
+  try {
+    const dbId = process.env.NOTION_EQUIPMENT_DB;
+    const e = req.body || {};
+    if (!e.name || !e.type) return res.status(400).json({ error: "Name and type are required" });
+    const page = await notion("/pages", {
+      parent: { database_id: dbId },
+      properties: {
+        "Equipment Name": { title: rt(e.name) },
+        "Type": { select: { name: e.type } },
+        ...(e.brand && { "Brand": { rich_text: rt(e.brand) } }),
+        ...(e.model && { "Model": { rich_text: rt(e.model) } }),
+      },
+    });
+    res.json({ item: { id: page.id, name: e.name, type: e.type, brand: e.brand || "", model: e.model || "" } });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /brews — save one reviewed brew to the Brews DB
+app.post("/brews", async (req, res) => {
+  try {
+    const dbId = process.env.NOTION_BREWS_DB;
+    if (!dbId) return res.status(400).json({ error: "NOTION_BREWS_DB not set" });
+    const b = req.body || {};
+    const missing = ["beanId", "brewerId", "grinderId", "grind", "temp", "plannedRatio", "dose", "water"]
+      .filter((k) => b[k] === "" || b[k] == null);
+    if (missing.length) return res.status(400).json({ error: `Missing: ${missing.join(", ")}` });
+
+    // Guard against double-saving the same Timemore brew
+    if (b.workId) {
+      const dup = await notion(`/databases/${dbId}/query`, { filter: { property: "Timemore ID", rich_text: { equals: String(b.workId) } } });
+      if (dup.results.length) return res.status(409).json({ error: "Already imported", url: dup.results[0].url });
+    }
+
+    const title = [b.date ? new Date(b.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : null, b.beanName]
+      .filter(Boolean).join(" · ") || `Brew ${b.workId || ""}`.trim();
+    const hasTasting = [b.rating, b.acidity, b.sweetness, b.bitterness, b.aroma].some((v) => v !== "" && v != null);
+
+    const page = await notion("/pages", {
+      parent: { database_id: dbId },
+      properties: {
+        "Brew": { title: rt(title) },
+        ...(b.date && { "Date": { date: { start: b.date } } }),
+        "Status": { select: { name: hasTasting ? "Tasted" : "Imported" } },
+        ...(b.workId && { "Timemore ID": { rich_text: rt(b.workId) } }),
+        ...(b.link && { "Timemore Link": { url: b.link } }),
+        "Bean": { relation: [{ id: b.beanId }] },
+        "Brewer": { relation: [{ id: b.brewerId }] },
+        "Grinder": { relation: [{ id: b.grinderId }] },
+        ...(b.timemoreBean && { "Timemore Bean": { rich_text: rt(b.timemoreBean) } }),
+        "Dose (g)": numProp(b.dose),
+        "Water (g)": numProp(b.water),
+        "Yield (g)": numProp(b.yield),
+        "Planned Ratio": numProp(b.plannedRatio),
+        "Grind": numProp(b.grind),
+        "Temp (°C)": numProp(b.temp),
+        "Total Time (s)": numProp(b.totalTime),
+        "Bloom (g)": numProp(b.bloomGrams),
+        "Bloom Time (s)": numProp(b.bloomTime),
+        "Pours": numProp(b.pourCount),
+        "Avg Flow (g/s)": numProp(b.avgFlow),
+        ...(b.brewLog && { "Brew Log": { rich_text: rt(b.brewLog) } }),
+        "Rating": numProp(b.rating),
+        "Acidity": numProp(b.acidity),
+        "Sweetness": numProp(b.sweetness),
+        "Bitterness": numProp(b.bitterness),
+        "Aroma": numProp(b.aroma),
+        ...(b.issues?.length && { "Issues": { multi_select: b.issues.map((name) => ({ name })) } }),
+        ...(b.notes && { "Notes": { rich_text: rt(b.notes) } }),
+      },
+    });
+    res.json({ success: true, url: page.url, id: page.id });
   } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
 });
 

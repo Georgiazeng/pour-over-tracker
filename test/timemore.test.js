@@ -1,0 +1,69 @@
+// Run with: node test/timemore.test.js
+const fs = require("fs");
+const path = require("path");
+const assert = require("assert");
+const { parseSharePage, summariseCurve, extractWorkId } = require("../lib/timemore");
+
+const lines = fs.readFileSync(path.join(__dirname, "fixtures/share-258231.txt"), "utf8").trim().split("\n");
+
+// Variant A: one element per line
+const htmlA = `<html><head><script>var x="冲煮数据";</script></head><body>${lines.map(l => `<div>${l}</div>`).join("")}</body></html>`;
+// Variant B: values split across spans ("15.2" + "g", "未选择" + "|" + "6.2")
+const splitValue = (l) => {
+  if (l.includes("|")) return l.split("|").flatMap((x, i) => (i ? ["|", x.trim()] : [x.trim()]));
+  const m = l.match(/^([\d.]+) ?(g)$/);                       // "15.2 g" → "15.2", "g"
+  if (m) return [m[1], m[2]];
+  const d = l.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/); // date and time in separate tags
+  if (d) return [d[1], d[2]];
+  return [l];
+};
+const htmlB = "<body>" + lines.map(l => `<p>${splitValue(l).map(s => `<span>${s}</span>`).join("")}</p>`).join("") + "</body>";
+
+for (const [name, html] of [["one-per-line", htmlA], ["split-spans", htmlB]]) {
+  const s = parseSharePage(html);
+  assert.strictEqual(s.date, "2026-10-13", name);
+  assert.strictEqual(s.title, "Buena vista", name);
+  assert.ok(s.comment.includes("第一次"), name);
+  assert.strictEqual(s.rating, null, name);
+  assert.strictEqual(s.dose, 15.2, name);
+  assert.strictEqual(s.water, 241.7, name);
+  assert.strictEqual(s.yield, 206.5, name);
+  assert.strictEqual(s.ratio, 15.9, name);
+  assert.strictEqual(s.brewRatio, 13.6, name);
+  assert.strictEqual(s.totalTime, 145, name);
+  assert.strictEqual(s.grind, 6.2, name);
+  assert.strictEqual(s.temp, 92, name);
+  assert.strictEqual(s.grinderName, null, name);
+  assert.strictEqual(s.bean.origin, "Guatemala Buena Vista", name);
+  assert.strictEqual(s.bean.process, "natural", name);
+  assert.strictEqual(s.bean.roast, "Light", name);
+  console.log(`✓ share parser (${name})`);
+}
+
+// Synthetic curve: bloom 44 g over 0–10 s, wait, 2nd pour to 150 g (40–60 s), 3rd to 242 g (75–95 s), drain to 145 s
+const triples = [];
+for (let ms = 0; ms <= 145400; ms += 100) {
+  const t = ms / 1000;
+  let w;
+  if (t <= 10) w = 4.4 * t;
+  else if (t < 40) w = 44;
+  else if (t <= 60) w = 44 + (t - 40) * 5.3;
+  else if (t < 75) w = 150;
+  else if (t <= 95) w = 150 + (t - 75) * 4.6;
+  else w = 242;
+  const bev = t > 144 ? 206.5 : 0;
+  triples.push([ms, bev.toFixed(1), (w + (Math.random() - 0.5) * 0.2).toFixed(1)]);
+}
+const c = summariseCurve(triples);
+assert.strictEqual(c.pourCount, 3);
+assert.ok(Math.abs(c.bloomGrams - 44) < 1.5, `bloom ${c.bloomGrams}`);
+assert.ok(Math.abs(c.bloomTime - 40) < 1.5, `bloom time ${c.bloomTime}`);
+assert.strictEqual(c.yield, 206.5);
+assert.ok(Math.abs(c.avgFlow - 4.8) < 0.4, `avg flow ${c.avgFlow}`);
+console.log("✓ curve summary", { bloom: c.bloomGrams, bloomTime: c.bloomTime, pours: c.pourCount, avgFlow: c.avgFlow });
+console.log(c.brewLog);
+
+assert.strictEqual(extractWorkId("https://bm.timemore.com/v4/share/258231"), "258231");
+assert.strictEqual(extractWorkId("258231"), "258231");
+assert.strictEqual(extractWorkId("https://example.com/x"), null);
+console.log("✓ work ID extraction");
